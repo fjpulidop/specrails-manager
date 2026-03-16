@@ -6,49 +6,47 @@ import { ImplementWizard } from '../components/ImplementWizard'
 import { BatchImplementWizard } from '../components/BatchImplementWizard'
 import type { CommandInfo, JobSummary } from '../types'
 import { getApiBase } from '../lib/api'
-
-// Module-level cache — survives route changes, no flicker on re-mount
-let cachedCommands: CommandInfo[] | null = null
-let cachedJobs: JobSummary[] | null = null
+import { useHub } from '../hooks/useHub'
 
 export default function DashboardPage() {
-  const { recentJobs } = usePipeline()
-  const [commands, setCommands] = useState<CommandInfo[]>(cachedCommands ?? [])
-  const [jobs, setJobs] = useState<JobSummary[]>(cachedJobs ?? [])
-  const [isLoadingJobs, setIsLoadingJobs] = useState(cachedJobs === null)
+  const { activeProjectId } = useHub()
+  const { recentJobs } = usePipeline(activeProjectId)
+  const [commands, setCommands] = useState<CommandInfo[]>([])
+  const [jobs, setJobs] = useState<JobSummary[]>([])
+  const [isLoadingJobs, setIsLoadingJobs] = useState(true)
   const [wizardOpen, setWizardOpen] = useState<string | null>(null)
 
-  // Load commands from config (use cache, refresh silently)
+  // Load commands — re-fetch when active project changes
   useEffect(() => {
+    setCommands([])
     async function loadConfig() {
       try {
         const res = await fetch(`${getApiBase()}/config`)
         if (!res.ok) return
         const data = await res.json() as { commands: CommandInfo[] }
-        cachedCommands = data.commands
         setCommands(data.commands)
       } catch {
         // ignore
       }
     }
     loadConfig()
-  }, [])
+  }, [activeProjectId])
 
   // Use recentJobs from WebSocket init
   useEffect(() => {
-    cachedJobs = recentJobs
     setJobs(recentJobs)
     setIsLoadingJobs(false)
   }, [recentJobs])
 
-  // Refresh job list from REST API periodically (silent update, no loading state)
+  // Refresh job list — re-fetch when active project changes
   useEffect(() => {
+    setIsLoadingJobs(true)
+    setJobs([])
     async function refreshJobs() {
       try {
         const res = await fetch(`${getApiBase()}/jobs?limit=10`)
         if (!res.ok) return
         const data = await res.json() as { jobs: JobSummary[] }
-        cachedJobs = data.jobs
         setJobs(data.jobs)
         setIsLoadingJobs(false)
       } catch {
@@ -58,7 +56,7 @@ export default function DashboardPage() {
     refreshJobs()
     const interval = setInterval(refreshJobs, 10_000)
     return () => clearInterval(interval)
-  }, [])
+  }, [activeProjectId])
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
@@ -86,7 +84,6 @@ export default function DashboardPage() {
               const res = await fetch(`${getApiBase()}/jobs?limit=10`)
               if (!res.ok) return
               const data = await res.json() as { jobs: JobSummary[] }
-              cachedJobs = data.jobs
               setJobs(data.jobs)
             } catch { /* ignore */ }
           }}

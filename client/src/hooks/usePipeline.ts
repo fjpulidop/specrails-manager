@@ -1,4 +1,4 @@
-import { useState, useCallback, useLayoutEffect } from 'react'
+import { useState, useCallback, useLayoutEffect, useRef, useEffect } from 'react'
 import { useSharedWebSocket } from './useSharedWebSocket'
 import type { JobSummary, PhaseDefinition } from '../types'
 import { getApiBase } from '../lib/api'
@@ -35,7 +35,7 @@ const INITIAL_QUEUE: QueueState = {
   paused: false,
 }
 
-export function usePipeline() {
+export function usePipeline(activeProjectId?: string | null) {
   const [phaseDefinitions, setPhaseDefinitions] = useState<PhaseDefinition[]>([])
   const [phases, setPhases] = useState<PhaseMap>({})
   const [projectName, setProjectName] = useState('')
@@ -43,17 +43,26 @@ export function usePipeline() {
   const [recentJobs, setRecentJobs] = useState<JobSummary[]>([])
   const [queueState, setQueueState] = useState<QueueState>(INITIAL_QUEUE)
 
+  // Keep a ref to activeProjectId so the WS handler always sees the latest value
+  const activeProjectRef = useRef(activeProjectId)
+  activeProjectRef.current = activeProjectId
+
+  // Reset state when active project changes
+  useEffect(() => {
+    setPhaseDefinitions([])
+    setPhases({})
+    setProjectName('')
+    setLogLines([])
+    setRecentJobs([])
+    setQueueState(INITIAL_QUEUE)
+  }, [activeProjectId])
+
   const handleMessage = useCallback((data: unknown) => {
     const msg = data as { type: string; projectId?: string } & Record<string, unknown>
 
-    // In hub mode, ignore messages that don't belong to the active project.
-    // getApiBase() encodes the active project: '/api/projects/<id>' in hub mode.
-    const apiBase = getApiBase()
-    const activeProjectId = apiBase.startsWith('/api/projects/')
-      ? apiBase.split('/api/projects/')[1]
-      : null
-
-    if (activeProjectId && msg.projectId && msg.projectId !== activeProjectId) {
+    // Filter: only process messages for the active project
+    const currentProjectId = activeProjectRef.current
+    if (currentProjectId && msg.projectId && msg.projectId !== currentProjectId) {
       return
     }
 
@@ -97,13 +106,36 @@ export function usePipeline() {
 
   const { registerHandler, unregisterHandler, connectionStatus } = useSharedWebSocket()
 
-  // useLayoutEffect ensures the handler is registered synchronously before
-  // the browser paints, eliminating the frame gap where an 'init' message
-  // could arrive before the handler is registered.
   useLayoutEffect(() => {
     registerHandler('pipeline', handleMessage)
     return () => unregisterHandler('pipeline')
   }, [handleMessage, registerHandler, unregisterHandler])
+
+  // Fetch initial state for this project via REST (WS init only fires on connect)
+  useEffect(() => {
+    if (!activeProjectId) return
+    async function fetchState() {
+      try {
+        const res = await fetch(`${getApiBase()}/state`)
+        if (!res.ok) return
+        const msg = await res.json()
+        if (msg.projectName) setProjectName(msg.projectName)
+        if (msg.phaseDefinitions) {
+          setPhaseDefinitions(msg.phaseDefinitions)
+          const initialPhases: PhaseMap = {}
+          for (const def of msg.phaseDefinitions as PhaseDefinition[]) {
+            initialPhases[def.key] = msg.phases?.[def.key] ?? 'idle'
+          }
+          setPhases(initialPhases)
+        }
+        if (msg.recentJobs) setRecentJobs(msg.recentJobs)
+        if (msg.queue) setQueueState(msg.queue)
+      } catch {
+        // ignore — state endpoint may not exist in hub mode
+      }
+    }
+    fetchState()
+  }, [activeProjectId])
 
   return { phases, phaseDefinitions, projectName, logLines, connectionStatus, recentJobs, queueState }
 }
