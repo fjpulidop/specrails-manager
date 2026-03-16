@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { getApiBase } from '../lib/api'
+import { useHub } from '../hooks/useHub'
 import { CheckCircle2, XCircle, AlertCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
 import { Button } from '../components/ui/button'
@@ -9,6 +10,7 @@ import { Separator } from '../components/ui/separator'
 import type { ProjectConfig } from '../types'
 
 export default function SettingsPage() {
+  const { activeProjectId } = useHub()
   const [config, setConfig] = useState<ProjectConfig | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [labelFilter, setLabelFilter] = useState('')
@@ -16,6 +18,8 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
+    setConfig(null)
+    setIsLoading(true)
     async function loadConfig() {
       try {
         const res = await fetch(`${getApiBase()}/config`)
@@ -31,7 +35,7 @@ export default function SettingsPage() {
       }
     }
     loadConfig()
-  }, [])
+  }, [activeProjectId])
 
   async function saveSettings() {
     setIsSaving(true)

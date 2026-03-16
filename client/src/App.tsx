@@ -98,6 +98,7 @@ function HubApp() {
                 <Route path="/jobs/:id" element={<JobDetailPage />} />
                 <Route path="/analytics" element={<AnalyticsPage />} />
                 <Route path="/conversations" element={<ConversationsPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
             ) : (
