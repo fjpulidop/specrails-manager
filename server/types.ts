@@ -251,9 +251,55 @@ export interface HubProjectRemovedMessage {
   timestamp: string
 }
 
+// ─── Setup message types ──────────────────────────────────────────────────────
+
+export interface SetupLogMessage {
+  type: 'setup_log'
+  projectId: string
+  line: string
+  stream: 'stdout' | 'stderr'
+}
+
+export interface SetupCheckpointMessage {
+  type: 'setup_checkpoint'
+  projectId: string
+  checkpoint: string
+  status: 'running' | 'done'
+  detail?: string
+  duration_ms?: number
+}
+
+export interface SetupChatMessage {
+  type: 'setup_chat'
+  projectId: string
+  text: string
+  role: 'assistant' | 'user'
+}
+
+export interface SetupInstallDoneMessage {
+  type: 'setup_install_done'
+  projectId: string
+  timestamp: string
+}
+
+export interface SetupCompleteMessage {
+  type: 'setup_complete'
+  projectId: string
+  sessionId?: string
+  summary: { agents: number; personas: number; commands: number }
+}
+
+export interface SetupErrorMessage {
+  type: 'setup_error'
+  projectId: string
+  error: string
+}
+
 export type WsMessage =
   | LogMessage | PhaseMessage | InitMessage | QueueMessage | EventMessage
   | ChatStreamMessage | ChatDoneMessage | ChatErrorMessage
   | ChatCommandProposalMessage | ChatTitleUpdateMessage
   | HubProjectsMessage | HubProjectAddedMessage | HubProjectRemovedMessage
+  | SetupLogMessage | SetupCheckpointMessage | SetupChatMessage
+  | SetupInstallDoneMessage | SetupCompleteMessage | SetupErrorMessage
 

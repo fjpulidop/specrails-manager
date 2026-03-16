@@ -2,3 +2,4 @@ node_modules/
 dist/
 cli/dist/
 client/dist/
+data/

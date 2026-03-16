@@ -318,5 +318,53 @@ export function createProjectRouter(registry: ProjectRegistry): Router {
     res.json({ ok: true })
   })
 
+  // ─── Setup routes ─────────────────────────────────────────────────────────────
+
+  router.post('/:projectId/setup/install', (req: Request, res: Response) => {
+    const { project, setupManager } = ctx(req)
+    if (setupManager.isInstalling(project.id)) {
+      res.status(409).json({ error: 'Install already in progress' }); return
+    }
+    res.status(202).json({ ok: true })
+    setupManager.startInstall(project.id, project.path)
+  })
+
+  router.post('/:projectId/setup/start', (req: Request, res: Response) => {
+    const { project, setupManager } = ctx(req)
+    if (setupManager.isSettingUp(project.id)) {
+      res.status(409).json({ error: 'Setup already in progress' }); return
+    }
+    res.status(202).json({ ok: true })
+    setupManager.startSetup(project.id, project.path)
+  })
+
+  router.post('/:projectId/setup/message', (req: Request, res: Response) => {
+    const { project, setupManager } = ctx(req)
+    const { sessionId, message } = req.body ?? {}
+    if (!sessionId || typeof sessionId !== 'string') {
+      res.status(400).json({ error: 'sessionId is required' }); return
+    }
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      res.status(400).json({ error: 'message is required' }); return
+    }
+    if (setupManager.isSettingUp(project.id)) {
+      res.status(409).json({ error: 'Setup already in progress' }); return
+    }
+    res.status(202).json({ ok: true })
+    setupManager.resumeSetup(project.id, project.path, sessionId, message.trim())
+  })
+
+  router.get('/:projectId/setup/checkpoints', (req: Request, res: Response) => {
+    const { project, setupManager } = ctx(req)
+    const checkpoints = setupManager.getCheckpointStatus(project.id, project.path)
+    res.json({ checkpoints })
+  })
+
+  router.post('/:projectId/setup/abort', (req: Request, res: Response) => {
+    const { project, setupManager } = ctx(req)
+    setupManager.abort(project.id)
+    res.json({ ok: true })
+  })
+
   return router
 }

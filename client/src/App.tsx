@@ -9,6 +9,7 @@ import ConversationsPage from './pages/ConversationsPage'
 import GlobalSettingsPage from './pages/GlobalSettingsPage'
 import { ProjectLayout } from './components/ProjectLayout'
 import { WelcomeScreen } from './components/WelcomeScreen'
+import { SetupWizard } from './components/SetupWizard'
 import { TabBar } from './components/TabBar'
 import { AddProjectDialog } from './components/AddProjectDialog'
 import { SharedWebSocketProvider } from './hooks/useSharedWebSocket'
@@ -38,10 +39,11 @@ function useHubMode(): boolean {
 // ─── Hub app shell ────────────────────────────────────────────────────────────
 
 function HubApp() {
-  const { projects, activeProjectId, isLoading } = useHub()
+  const { projects, activeProjectId, isLoading, setupProjectIds, completeSetupWizard } = useHub()
   const [addDialogOpen, setAddDialogOpen] = useState(false)
 
   const activeProject = projects.find((p) => p.id === activeProjectId)
+  const isInSetup = activeProjectId !== null && setupProjectIds.has(activeProjectId)
 
   if (isLoading) {
     return (
@@ -80,26 +82,34 @@ function HubApp() {
 
       {/* Main content */}
       <div className="flex-1 overflow-hidden">
-        <Routes>
-          <Route path="/settings" element={<GlobalSettingsPage />} />
-          {projects.length === 0 ? (
-            <Route path="*" element={<WelcomeScreen onAddProject={() => setAddDialogOpen(true)} />} />
-          ) : activeProject ? (
-            <Route element={<ProjectLayout project={activeProject} />}>
-              <Route path="/" element={<DashboardPage />} />
-              <Route path="/jobs/:id" element={<JobDetailPage />} />
-              <Route path="/analytics" element={<AnalyticsPage />} />
-              <Route path="/conversations" element={<ConversationsPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Route>
-          ) : (
-            <Route path="*" element={
-              <div className="flex items-center justify-center h-full">
-                <p className="text-sm text-muted-foreground">Select a project</p>
-              </div>
-            } />
-          )}
-        </Routes>
+        {isInSetup && activeProject ? (
+          <SetupWizard
+            project={activeProject}
+            onComplete={() => completeSetupWizard(activeProject.id)}
+            onSkip={() => completeSetupWizard(activeProject.id)}
+          />
+        ) : (
+          <Routes>
+            <Route path="/settings" element={<GlobalSettingsPage />} />
+            {projects.length === 0 ? (
+              <Route path="*" element={<WelcomeScreen onAddProject={() => setAddDialogOpen(true)} />} />
+            ) : activeProject ? (
+              <Route element={<ProjectLayout project={activeProject} />}>
+                <Route path="/" element={<DashboardPage />} />
+                <Route path="/jobs/:id" element={<JobDetailPage />} />
+                <Route path="/analytics" element={<AnalyticsPage />} />
+                <Route path="/conversations" element={<ConversationsPage />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Route>
+            ) : (
+              <Route path="*" element={
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-sm text-muted-foreground">Select a project</p>
+                </div>
+              } />
+            )}
+          </Routes>
+        )}
       </div>
 
       <AddProjectDialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} />

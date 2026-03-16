@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { FolderOpen, AlertTriangle, Check } from 'lucide-react'
+import { FolderOpen } from 'lucide-react'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import {
@@ -11,7 +11,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from './ui/dialog'
-// Hub context drives the WS-based project list update after add
+import { useHub } from '../hooks/useHub'
 
 interface AddProjectDialogProps {
   open: boolean
@@ -20,14 +20,15 @@ interface AddProjectDialogProps {
 
 type DialogState =
   | { step: 'input' }
-  | { step: 'no-specrails'; projectName: string; projectPath: string }
-  | { step: 'installing'; projectName: string; projectPath: string }
 
 export function AddProjectDialog({ open, onClose }: AddProjectDialogProps) {
   const [projectPath, setProjectPath] = useState('')
   const [projectName, setProjectName] = useState('')
   const [isAdding, setIsAdding] = useState(false)
-  const [dialogState, setDialogState] = useState<DialogState>({ step: 'input' })
+  const [dialogState] = useState<DialogState>({ step: 'input' })
+
+  const { startSetupWizard, setActiveProjectId } = useHub()
+
   async function handleAdd() {
     const trimmedPath = projectPath.trim()
     if (!trimmedPath) {
@@ -50,14 +51,15 @@ export function AddProjectDialog({ open, onClose }: AddProjectDialogProps) {
         return
       }
 
+      const project = data.project
+
       if (data.has_specrails === false) {
-        setDialogState({
-          step: 'no-specrails',
-          projectName: data.project.name,
-          projectPath: data.project.path,
-        })
+        // Close the dialog and switch to the project tab, then trigger wizard
+        resetAndClose()
+        setActiveProjectId(project.id)
+        startSetupWizard(project.id)
       } else {
-        toast.success(`Project "${data.project.name}" registered`)
+        toast.success(`Project "${project.name}" registered`)
         resetAndClose()
       }
     } catch (err) {
@@ -70,20 +72,12 @@ export function AddProjectDialog({ open, onClose }: AddProjectDialogProps) {
   function resetAndClose() {
     setProjectPath('')
     setProjectName('')
-    setDialogState({ step: 'input' })
     onClose()
   }
 
   function handleOpenChange(isOpen: boolean) {
     if (!isOpen) resetAndClose()
   }
-
-  function handleSkipInstall() {
-    toast.success(`Project "${(dialogState as { projectName: string }).projectName}" registered without specrails`)
-    resetAndClose()
-  }
-
-  // ─── Input step ──────────────────────────────────────────────────────────────
 
   if (dialogState.step === 'input') {
     return (
@@ -138,64 +132,6 @@ export function AddProjectDialog({ open, onClose }: AddProjectDialogProps) {
             </Button>
             <Button size="sm" onClick={handleAdd} disabled={isAdding || !projectPath.trim()}>
               {isAdding ? 'Adding...' : 'Add Project'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    )
-  }
-
-  // ─── No specrails step ───────────────────────────────────────────────────────
-
-  if (dialogState.step === 'no-specrails') {
-    return (
-      <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-amber-500">
-              <AlertTriangle className="w-4 h-4" />
-              specrails not detected
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            <p className="text-sm text-muted-foreground">
-              <strong className="text-foreground">{dialogState.projectName}</strong> was registered
-              but doesn&apos;t have specrails installed. Without it, pipeline commands won&apos;t be available.
-            </p>
-
-            <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
-              <p className="text-xs font-medium">To install specrails, run in your project:</p>
-              <code className="block text-xs font-mono bg-background/50 px-2 py-1.5 rounded border border-border select-all">
-                cd {dialogState.projectPath} && npx specrails
-              </code>
-            </div>
-
-            <div className="text-xs text-muted-foreground space-y-1">
-              <p>This will set up:</p>
-              <ul className="list-none space-y-0.5 ml-1">
-                <li className="flex items-start gap-1.5">
-                  <Check className="w-3 h-3 mt-0.5 text-dracula-green flex-shrink-0" />
-                  <span>Specialized AI agents (architect, developer, reviewer)</span>
-                </li>
-                <li className="flex items-start gap-1.5">
-                  <Check className="w-3 h-3 mt-0.5 text-dracula-green flex-shrink-0" />
-                  <span>Workflow commands (/sr:implement, /sr:product-backlog...)</span>
-                </li>
-                <li className="flex items-start gap-1.5">
-                  <Check className="w-3 h-3 mt-0.5 text-dracula-green flex-shrink-0" />
-                  <span>User personas and per-layer conventions</span>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={handleSkipInstall}>
-              Skip for now
-            </Button>
-            <Button size="sm" onClick={resetAndClose}>
-              Got it
             </Button>
           </DialogFooter>
         </DialogContent>

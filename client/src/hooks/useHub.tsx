@@ -27,6 +27,10 @@ interface HubContextValue {
   addProject: (path: string, name?: string) => Promise<HubProject | null>
   removeProject: (id: string) => Promise<void>
   isLoading: boolean
+  /** IDs of projects currently in the setup wizard */
+  setupProjectIds: Set<string>
+  startSetupWizard: (projectId: string) => void
+  completeSetupWizard: (projectId: string) => void
 }
 
 const HubContext = createContext<HubContextValue | null>(null)
@@ -35,6 +39,7 @@ export function HubProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<HubProject[]>([])
   const [activeProjectId, setActiveProjectIdRaw] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [setupProjectIds, setSetupProjectIds] = useState<Set<string>>(new Set())
 
   function setActiveProjectId(id: string | null): void {
     setApiContext(true, id)
@@ -142,6 +147,18 @@ export function HubProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const startSetupWizard = useCallback((projectId: string) => {
+    setSetupProjectIds((prev) => new Set([...prev, projectId]))
+  }, [])
+
+  const completeSetupWizard = useCallback((projectId: string) => {
+    setSetupProjectIds((prev) => {
+      const next = new Set(prev)
+      next.delete(projectId)
+      return next
+    })
+  }, [])
+
   return (
     <HubContext.Provider value={{
       projects,
@@ -150,6 +167,9 @@ export function HubProvider({ children }: { children: ReactNode }) {
       addProject,
       removeProject,
       isLoading,
+      setupProjectIds,
+      startSetupWizard,
+      completeSetupWizard,
     }}>
       {children}
     </HubContext.Provider>
