@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Routes, Route, Navigate, NavLink } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { RootLayout } from './components/RootLayout'
 import DashboardPage from './pages/DashboardPage'
 import JobDetailPage from './pages/JobDetailPage'
 import SettingsPage from './pages/SettingsPage'
 import AnalyticsPage from './pages/AnalyticsPage'
 import ConversationsPage from './pages/ConversationsPage'
-import GlobalSettingsPage from './pages/GlobalSettingsPage'
+import SettingsDialog from './pages/GlobalSettingsPage'
 import { ProjectLayout } from './components/ProjectLayout'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { SetupWizard } from './components/SetupWizard'
@@ -41,6 +41,7 @@ function useHubMode(): boolean {
 function HubApp() {
   const { projects, activeProjectId, isLoading, setupProjectIds, completeSetupWizard } = useHub()
   const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const activeProject = projects.find((p) => p.id === activeProjectId)
   const isInSetup = activeProjectId !== null && setupProjectIds.has(activeProjectId)
@@ -65,14 +66,13 @@ function HubApp() {
           <span className="text-dracula-pink">rails</span>
           <span className="text-muted-foreground text-xs font-normal ml-1">/ hub</span>
         </span>
-        <NavLink
-          to="/settings"
-          className={({ isActive }) =>
-            `text-xs transition-colors ${isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`
-          }
+        <button
+          type="button"
+          onClick={() => setSettingsOpen(true)}
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           Settings
-        </NavLink>
+        </button>
       </div>
 
       {/* Project tabs */}
@@ -90,7 +90,6 @@ function HubApp() {
           />
         ) : (
           <Routes>
-            <Route path="/settings" element={<GlobalSettingsPage />} />
             {projects.length === 0 ? (
               <Route path="*" element={<WelcomeScreen onAddProject={() => setAddDialogOpen(true)} />} />
             ) : activeProject ? (
@@ -113,6 +112,7 @@ function HubApp() {
       </div>
 
       <AddProjectDialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} />
+      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   )
 }
