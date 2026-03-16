@@ -32,8 +32,8 @@ const PKG_VERSION: string = (() => {
 
 // ─── Mode detection ───────────────────────────────────────────────────────────
 
-// Hub mode: started with --hub flag or SPECRAILS_HUB=1 env var
-const isHubMode = process.argv.includes('--hub') || process.env.SPECRAILS_HUB === '1'
+// Hub mode is the default. Use --legacy or SPECRAILS_LEGACY=1 for single-project mode.
+const isHubMode = !process.argv.includes('--legacy') && process.env.SPECRAILS_LEGACY !== '1'
 
 // ─── Resolve project name (legacy single-project mode) ────────────────────────
 

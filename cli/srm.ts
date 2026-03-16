@@ -808,13 +808,13 @@ async function hubStart(port: number): Promise<number> {
   const serverPath = hubServerPath()
   const isTs = serverPath.endsWith('.ts')
   const args = isTs
-    ? ['tsx', serverPath, '--hub', '--port', String(port)]
-    : ['node', serverPath, '--hub', '--port', String(port)]
+    ? ['tsx', serverPath, '--port', String(port)]
+    : ['node', serverPath, '--port', String(port)]
 
   const child = spawnProc(args[0], args.slice(1), {
     detached: true,
     stdio: 'ignore',
-    env: { ...process.env, SPECRAILS_HUB: '1' },
+    env: { ...process.env },
   })
   child.unref()
 
