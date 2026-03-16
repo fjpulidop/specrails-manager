@@ -176,8 +176,20 @@ export function HubProvider({ children }: { children: ReactNode }) {
   )
 }
 
+const LEGACY_FALLBACK: HubContextValue = {
+  projects: [],
+  activeProjectId: null,
+  setActiveProjectId: () => {},
+  addProject: async () => null,
+  removeProject: async () => {},
+  isLoading: false,
+  setupProjectIds: new Set(),
+  startSetupWizard: () => {},
+  completeSetupWizard: () => {},
+}
+
 export function useHub(): HubContextValue {
   const ctx = useContext(HubContext)
-  if (!ctx) throw new Error('useHub must be used within HubProvider')
-  return ctx
+  // In legacy (non-hub) mode there is no HubProvider — return safe defaults
+  return ctx ?? LEGACY_FALLBACK
 }
