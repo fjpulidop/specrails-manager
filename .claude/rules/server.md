@@ -1,0 +1,57 @@
+---
+paths:
+  - "server/**"
+  - "cli/**"
+---
+
+# Server & CLI Conventions
+
+## TypeScript
+
+- CommonJS output (`"module": "commonjs"` in `tsconfig.json`) — use `require()` for imports where needed, but prefer `import` syntax compiled to CJS
+- Strict mode enabled — no implicit `any`
+- File naming: kebab-case (e.g., `queue-manager.ts`, `hub-router.ts`)
+
+## Express patterns
+
+- All project-scoped routes live in `server/project-router.ts` under `router.<method>('/...')`
+- All hub-scoped routes live in `server/hub-router.ts` under `router.<method>('/...')`
+- Route handlers should be thin — delegate business logic to manager classes
+- Always validate `projectId` existence via `ProjectRegistry` before accessing `ProjectContext`
+
+## SQLite (better-sqlite3)
+
+- **Always use parameterized queries** — never string-interpolate user input into SQL
+  - Wrong: `` db.prepare(`SELECT * FROM jobs WHERE id = ${id}`) ``
+  - Right: `db.prepare('SELECT * FROM jobs WHERE id = ?').get(id)`
+- All DB initialization happens via the `MIGRATIONS` array in `server/db.ts` — add new migrations at the end, never modify existing ones
+- Use `:memory:` in all tests — never use real file paths in tests
+- The `ProjectContext` holds the DB instance — never create `new Database(...)` inside route handlers
+
+## WebSocket protocol
+
+- Every project-scoped message MUST include `projectId`
+- Client-side handlers filter by `activeProjectId` using a ref (not state) to avoid stale closures
+- Hub-level messages (`hub.project_added`, `hub.project_removed`, `hub.projects`) have NO `projectId` field
+- Use `boundBroadcast` closures to inject `projectId` — do not pass it as a constructor argument
+
+## Process spawning
+
+- `QueueManager` and `ChatManager` spawn `claude` CLI processes — always set `cwd` to `project.path`
+- Validate and sanitize any user-provided arguments before passing to `spawn()` or `exec()`
+
+## Hub mode
+
+- Server runs in hub mode by default — one Express process, multiple projects
+- `ProjectRegistry` loads all `ProjectContext` instances at startup
+- `~/.specrails/hub.sqlite` — hub-level SQLite (project registry)
+- `~/.specrails/projects/<slug>/jobs.sqlite` — per-project SQLite
+
+## Testing
+
+- Test framework: Vitest with Node.js environment
+- Test files: `<module>.test.ts` alongside source files in `server/` or `cli/`
+- Always use `initDb(':memory:')` — never real file paths
+- Reset DB state in `beforeEach` with a fresh `initDb(':memory:')`
+- Use Supertest for Express route tests: `import request from 'supertest'`
+- Coverage: `server/**/*.test.ts` and `cli/**/*.test.ts` (no client tests)
