@@ -30,7 +30,7 @@ export default function DashboardPage() {
     },
   })
 
-  const { data: jobs, isFirstLoad: isLoadingJobs, refresh: refreshJobs } = useProjectCache<JobSummary[]>({
+  const { data: rawJobs, isFirstLoad: isLoadingJobs, refresh: refreshJobs } = useProjectCache<JobSummary[]>({
     namespace: 'jobs',
     projectId: activeProjectId,
     initialValue: recentJobs,
@@ -42,6 +42,41 @@ export default function DashboardPage() {
     },
     pollInterval: 10_000,
   })
+
+  // Fetch proposals and merge into jobs list
+  const { data: proposals } = useProjectCache<Array<{ id: string; idea: string; status: string; created_at: string; issue_url: string | null }>>({
+    namespace: 'proposals',
+    projectId: activeProjectId,
+    initialValue: [],
+    fetcher: async () => {
+      const res = await fetch(`${getApiBase()}/propose?limit=10`)
+      if (!res.ok) return []
+      const data = await res.json() as { proposals: Array<{ id: string; idea: string; status: string; created_at: string; issue_url: string | null }> }
+      return data.proposals
+    },
+    pollInterval: 10_000,
+  })
+
+  const PROPOSAL_STATUS_MAP: Record<string, JobSummary['status']> = {
+    input: 'queued',
+    exploring: 'running',
+    review: 'completed',
+    refining: 'running',
+    creating_issue: 'running',
+    created: 'completed',
+    cancelled: 'canceled',
+  }
+
+  const proposalJobs: JobSummary[] = proposals.map((p) => ({
+    id: `proposal:${p.id}`,
+    command: `/sr:propose-feature ${p.idea.length > 60 ? p.idea.slice(0, 57) + '...' : p.idea}`,
+    started_at: p.created_at,
+    status: PROPOSAL_STATUS_MAP[p.status] ?? 'queued',
+  }))
+
+  const jobs = [...rawJobs, ...proposalJobs].sort(
+    (a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime()
+  )
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">

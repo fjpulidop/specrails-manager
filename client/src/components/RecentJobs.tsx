@@ -8,6 +8,7 @@ import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import type { JobSummary, JobStatus } from '../types'
+import { cn } from '../lib/utils'
 
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'running' | 'queued' | 'failed' | 'canceled'
 
@@ -220,11 +221,16 @@ export function RecentJobs({ jobs, isLoading, onJobsCleared }: RecentJobsProps) 
           const duration = formatDuration(job.duration_ms)
           const tokens = formatTokens(job.tokens_out)
 
+          const isProposal = job.id.startsWith('proposal:')
+
           return (
             <div
               key={job.id}
-              className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent/50 transition-colors cursor-pointer group"
-              onClick={() => navigate(`/jobs/${job.id}`)}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors',
+                isProposal ? 'opacity-80' : 'hover:bg-accent/50 cursor-pointer group'
+              )}
+              onClick={() => !isProposal && navigate(`/jobs/${job.id}`)}
             >
               {/* Status badge */}
               <Tooltip>
