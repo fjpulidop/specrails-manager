@@ -108,6 +108,16 @@ export function useProposal(projectId: string | null): {
   const proposalIdRef = useRef<string | null>(null)
   proposalIdRef.current = state.proposalId
 
+  // Reset state when switching projects
+  const prevProjectId = useRef(projectId)
+  useEffect(() => {
+    if (projectId !== prevProjectId.current) {
+      prevProjectId.current = projectId
+      proposalIdRef.current = null
+      dispatch({ type: 'RESET' })
+    }
+  }, [projectId])
+
   // Subscribe to WebSocket messages for this proposal
   useEffect(() => {
     const handlerId = 'proposal-hook'
