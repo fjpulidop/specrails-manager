@@ -34,6 +34,18 @@ const INITIAL_CHECKPOINTS: CheckpointState[] = [
   { key: 'final_verification', name: 'Final verification', status: 'pending' },
 ]
 
+// ─── Per-project wizard state cache (survives unmount on tab switch) ─────────
+
+interface WizardSnapshot {
+  wizardStep: WizardStep
+  checkpoints: CheckpointState[]
+  logLines: string[]
+  chatMessages: SetupChatMessage[]
+  sessionId: string | null
+}
+
+const wizardCache = new Map<string, WizardSnapshot>()
+
 // ─── Phase 2: Proposal ────────────────────────────────────────────────────────
 
 function ProposalStep({
@@ -211,16 +223,48 @@ interface SetupWizardProps {
   onSkip: () => void
 }
 
-export function SetupWizard({ project, onComplete, onSkip }: SetupWizardProps) {
-  const [wizardStep, setWizardStep] = useState<WizardStep>({ step: 'proposal' })
-  const [checkpoints, setCheckpoints] = useState<CheckpointState[]>(INITIAL_CHECKPOINTS)
-  const [logLines, setLogLines] = useState<string[]>([])
-  const [chatMessages, setChatMessages] = useState<SetupChatMessage[]>([])
+export function SetupWizard({ project, onComplete: rawOnComplete, onSkip: rawOnSkip }: SetupWizardProps) {
+  // Wrap callbacks to clear cache when wizard finishes
+  const onComplete = useCallback(() => { wizardCache.delete(project.id); rawOnComplete() }, [project.id, rawOnComplete])
+  const onSkip = useCallback(() => { wizardCache.delete(project.id); rawOnSkip() }, [project.id, rawOnSkip])
+
+  // Restore from cache if returning to a project mid-setup
+  const cached = wizardCache.get(project.id)
+
+  const [wizardStep, setWizardStep] = useState<WizardStep>(cached?.wizardStep ?? { step: 'proposal' })
+  const [checkpoints, setCheckpoints] = useState<CheckpointState[]>(cached?.checkpoints ?? INITIAL_CHECKPOINTS)
+  const [logLines, setLogLines] = useState<string[]>(cached?.logLines ?? [])
+  const [chatMessages, setChatMessages] = useState<SetupChatMessage[]>(cached?.chatMessages ?? [])
   const [streamingText, setStreamingText] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
-  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [sessionId, setSessionId] = useState<string | null>(cached?.sessionId ?? null)
   // Track whether we need to auto-start the setup phase after install completes
   const pendingSetupStart = useRef(false)
+
+  // Save state to cache on every update so it survives unmount
+  const wizardStepRef = useRef(wizardStep)
+  const checkpointsRef = useRef(checkpoints)
+  const logLinesRef = useRef(logLines)
+  const chatMessagesRef = useRef(chatMessages)
+  const sessionIdRef = useRef(sessionId)
+  wizardStepRef.current = wizardStep
+  checkpointsRef.current = checkpoints
+  logLinesRef.current = logLines
+  chatMessagesRef.current = chatMessages
+  sessionIdRef.current = sessionId
+
+  useEffect(() => {
+    return () => {
+      // Save to cache on unmount (tab switch)
+      wizardCache.set(project.id, {
+        wizardStep: wizardStepRef.current,
+        checkpoints: checkpointsRef.current,
+        logLines: logLinesRef.current,
+        chatMessages: chatMessagesRef.current,
+        sessionId: sessionIdRef.current,
+      })
+    }
+  }, [project.id])
 
   const { registerHandler, unregisterHandler } = useSharedWebSocket()
 
