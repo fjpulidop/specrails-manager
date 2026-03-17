@@ -15,11 +15,6 @@ interface CheckpointTrackerProps {
   logLines: string[]
 }
 
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`
-  return `${(ms / 1000).toFixed(1)}s`
-}
-
 function CheckpointNode({ checkpoint, index }: { checkpoint: CheckpointState; index: number }) {
   const isDone = checkpoint.status === 'done'
   const isRunning = checkpoint.status === 'running'
