@@ -9,6 +9,48 @@ import {
 } from './db'
 import { resolveCommand } from './command-resolver'
 
+// Inline fallback prompt when /sr:propose-feature command file is not installed
+const FALLBACK_PROMPT = `You are a senior product engineer helping evaluate and structure a feature proposal for this codebase.
+
+The user's raw idea is:
+
+$IDEA
+
+## Your Task
+
+Before proposing anything, explore the codebase to understand:
+1. What already exists that relates to this idea
+2. What the current architecture looks like in the relevant area
+3. What constraints or patterns you must respect
+
+Use Read, Glob, and Grep to explore. Take at least 3 codebase reads before writing the proposal.
+
+## Required Output
+
+Output ONLY the following structured markdown. Do not add any preamble or explanation outside these sections.
+
+## Feature Title
+[A concise, action-oriented title]
+
+## Problem Statement
+[2-3 sentences: what problem does this solve? Who experiences it?]
+
+## Proposed Solution
+[3-5 sentences: what exactly will be built?]
+
+## Out of Scope
+[Bullet list of things this proposal deliberately does NOT cover]
+
+## Acceptance Criteria
+[Numbered list of testable outcomes]
+
+## Technical Considerations
+[Bullet list of implementation notes, constraints, risks]
+
+## Estimated Complexity
+[One of: Low / Medium / High / Very High]
+[One sentence justifying the estimate]`
+
 // ─── ProposalManager ──────────────────────────────────────────────────────────
 
 export class ProposalManager {
@@ -37,8 +79,13 @@ export class ProposalManager {
       return
     }
 
+    // Try resolving the command file; fall back to inline prompt
     const rawCommand = `/sr:propose-feature ${idea}`
-    const resolvedPrompt = resolveCommand(rawCommand, this._cwd)
+    let prompt = resolveCommand(rawCommand, this._cwd)
+    if (prompt === rawCommand) {
+      // Command file not found — use fallback prompt
+      prompt = FALLBACK_PROMPT.replace('$IDEA', idea)
+    }
 
     updateProposal(this._db, proposalId, { status: 'exploring' })
 
@@ -46,7 +93,7 @@ export class ProposalManager {
       '--dangerously-skip-permissions',
       '--output-format', 'stream-json',
       '--verbose',
-      '-p', resolvedPrompt,
+      '-p', prompt,
     ]
 
     await this._runProcess(proposalId, args, (fullText, sessionId) => {
@@ -57,14 +104,14 @@ export class ProposalManager {
       })
       this._broadcast({
         type: 'proposal_ready',
-        projectId: '',  // will be overwritten by boundBroadcast in project-registry
+        projectId: '',
         proposalId,
         markdown: fullText,
         timestamp: new Date().toISOString(),
       })
     }, () => {
       updateProposal(this._db, proposalId, { status: 'input' })
-      this._broadcastError(proposalId, `Exploration failed`)
+      this._broadcastError(proposalId, 'Exploration failed')
     })
   }
 
@@ -105,7 +152,7 @@ export class ProposalManager {
       })
     }, () => {
       updateProposal(this._db, proposalId, { status: 'review' })
-      this._broadcastError(proposalId, `Refinement failed`)
+      this._broadcastError(proposalId, 'Refinement failed')
     })
   }
 
@@ -214,9 +261,10 @@ export class ProposalManager {
         if (sid) capturedSessionId = sid
       }
 
+      // Extract text from assistant events (skip thinking blocks)
       if (eventType === 'assistant') {
-        const content = parsed.message as { content?: Array<{ type: string; text?: string }> } | undefined
-        const texts = (content?.content ?? [])
+        const msg = parsed.message as { content?: Array<{ type: string; text?: string }> } | undefined
+        const texts = (msg?.content ?? [])
           .filter((c) => c.type === 'text')
           .map((c) => c.text ?? '')
         const newText = texts.join('')
