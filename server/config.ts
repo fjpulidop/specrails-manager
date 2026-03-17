@@ -161,7 +161,7 @@ function slugify(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
-function scanCommands(commandsDir: string): CommandInfo[] {
+export function scanCommands(commandsDir: string): CommandInfo[] {
   if (!fs.existsSync(commandsDir)) return []
 
   let files: string[]

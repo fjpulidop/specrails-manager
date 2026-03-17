@@ -13,6 +13,7 @@ import {
   HelpCircle,
   Play,
   ArrowRight,
+  FlaskConical,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
@@ -60,6 +61,11 @@ const COMMAND_META: Record<string, { icon: LucideIcon; color: string; glow: stri
     color: 'text-muted-foreground',
     glow: 'hover:glow-purple hover:border-dracula-purple/40',
   },
+  test: {
+    icon: FlaskConical,
+    color: 'text-dracula-cyan',
+    glow: 'hover:glow-cyan hover:border-dracula-cyan/40',
+  },
 }
 
 const FALLBACK_META = {
@@ -68,7 +74,7 @@ const FALLBACK_META = {
   glow: 'hover:glow-purple hover:border-dracula-purple/40',
 }
 
-const WIZARD_COMMANDS = new Set(['implement', 'batch-implement'])
+const WIZARD_COMMANDS = new Set(['implement', 'batch-implement', 'test'])
 
 interface CommandGridProps {
   commands: CommandInfo[]

@@ -5,6 +5,8 @@ import { CommandGrid } from '../components/CommandGrid'
 import { RecentJobs } from '../components/RecentJobs'
 import { ImplementWizard } from '../components/ImplementWizard'
 import { BatchImplementWizard } from '../components/BatchImplementWizard'
+import { TestWizard } from '../components/TestWizard'
+import { TestRunnerWidget } from '../components/TestRunnerWidget'
 import type { CommandInfo, JobSummary } from '../types'
 import { getApiBase } from '../lib/api'
 import { useHub } from '../hooks/useHub'
@@ -53,6 +55,16 @@ export default function DashboardPage() {
 
       <section>
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+          Tests
+        </h2>
+        <TestRunnerWidget
+          jobs={jobs}
+          onLaunch={() => setWizardOpen('test')}
+        />
+      </section>
+
+      <section>
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
           Recent Jobs
         </h2>
         <RecentJobs
@@ -68,6 +80,10 @@ export default function DashboardPage() {
       />
       <BatchImplementWizard
         open={wizardOpen === 'batch-implement'}
+        onClose={() => setWizardOpen(null)}
+      />
+      <TestWizard
+        open={wizardOpen === 'test'}
         onClose={() => setWizardOpen(null)}
       />
     </div>
