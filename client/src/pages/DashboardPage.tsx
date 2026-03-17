@@ -47,27 +47,6 @@ export default function DashboardPage() {
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
       <section>
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-          Commands
-        </h2>
-        <CommandGrid
-          commands={commands}
-          onOpenWizard={(slug) => setWizardOpen(slug)}
-        />
-      </section>
-
-      <section>
-        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-          Recent Jobs
-        </h2>
-        <RecentJobs
-          jobs={jobs}
-          isLoading={isLoadingJobs}
-          onJobsCleared={refreshJobs}
-        />
-      </section>
-
-      <section>
-        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
           Feature Discovery
         </h2>
         <button
@@ -88,6 +67,27 @@ export default function DashboardPage() {
             </p>
           </div>
         </button>
+      </section>
+
+      <section>
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+          Commands
+        </h2>
+        <CommandGrid
+          commands={commands}
+          onOpenWizard={(slug) => setWizardOpen(slug)}
+        />
+      </section>
+
+      <section>
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+          Recent Jobs
+        </h2>
+        <RecentJobs
+          jobs={jobs}
+          isLoading={isLoadingJobs}
+          onJobsCleared={refreshJobs}
+        />
       </section>
 
       <ImplementWizard
