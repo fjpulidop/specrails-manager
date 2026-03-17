@@ -61,11 +61,7 @@ function CheckpointNode({ checkpoint, index }: { checkpoint: CheckpointState; in
           >
             {checkpoint.name}
           </span>
-          {isDone && checkpoint.duration_ms !== undefined && (
-            <span className="text-[10px] text-muted-foreground">
-              {formatDuration(checkpoint.duration_ms)}
-            </span>
-          )}
+          {/* duration intentionally hidden — it clutters the UI */}
         </div>
         {(isRunning || isDone) && checkpoint.detail && (
           <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
