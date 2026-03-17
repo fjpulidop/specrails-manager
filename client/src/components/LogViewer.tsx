@@ -14,6 +14,32 @@ interface FormattedLine {
   timestamp?: string
 }
 
+// Detect lines that contain markdown formatting
+function hasMarkdownSyntax(line: string): boolean {
+  const trimmed = line.trimStart()
+  // Headers
+  if (/^#{1,6}\s/.test(trimmed)) return true
+  // Unordered lists
+  if (/^[-*+]\s/.test(trimmed)) return true
+  // Ordered lists
+  if (/^\d+\.\s/.test(trimmed)) return true
+  // Tables
+  if (/^\|.+\|/.test(trimmed)) return true
+  // Code blocks
+  if (trimmed.startsWith('```')) return true
+  // Blockquotes
+  if (trimmed.startsWith('> ')) return true
+  // Bold, italic, inline code, links (within normal text)
+  if (/\*\*[^*]+\*\*/.test(line)) return true
+  if (/`[^`]+`/.test(line)) return true
+  if (/\[.+\]\(.+\)/.test(line)) return true
+  // Horizontal rules
+  if (/^(-{3,}|_{3,}|\*{3,})$/.test(trimmed)) return true
+  // Checkboxes
+  if (/^- \[[ x]\]\s/.test(trimmed)) return true
+  return false
+}
+
 function parseEvent(event: EventRow, idx: number): FormattedLine | null {
   const id = `${event.id ?? idx}`
   const timestamp = event.timestamp
@@ -29,8 +55,16 @@ function parseEvent(event: EventRow, idx: number): FormattedLine | null {
         return { id, content: line, type: 'phase', timestamp }
       }
 
-      const type = event.source === 'stderr' ? 'stderr' : 'plain'
-      return { id, content: line, type, timestamp }
+      if (event.source === 'stderr') {
+        return { id, content: line, type: 'stderr', timestamp }
+      }
+
+      // Detect markdown content — lines from Claude's assistant output
+      if (hasMarkdownSyntax(line)) {
+        return { id, content: line, type: 'assistant', timestamp }
+      }
+
+      return { id, content: line, type: 'plain', timestamp }
     } catch {
       return null
     }
@@ -79,9 +113,21 @@ export function LogViewer({ events, isLoading }: LogViewerProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const lines = events
+  const rawLines = events
     .map((ev, idx) => parseEvent(ev, idx))
     .filter((l): l is FormattedLine => l !== null)
+
+  // Merge consecutive 'assistant' (markdown) lines into single blocks
+  const lines: FormattedLine[] = []
+  for (const line of rawLines) {
+    const prev = lines.length > 0 ? lines[lines.length - 1] : null
+    if (line.type === 'assistant' && prev?.type === 'assistant') {
+      // Merge into previous block
+      prev.content += '\n' + line.content
+    } else {
+      lines.push({ ...line })
+    }
+  }
 
   const filtered = filter
     ? lines.filter((l) => l.content.toLowerCase().includes(filter.toLowerCase()))
