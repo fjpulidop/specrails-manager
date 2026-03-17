@@ -235,7 +235,7 @@ export function createProjectRouter(registry: ProjectRegistry): Router {
       }
       const search = req.query.search as string | undefined
       const label = req.query.label as string | undefined
-      const issues = fetchIssues(tracker, { search, label, repo: config.project.repo })
+      const issues = fetchIssues(tracker, { search, label, repo: config.project.repo, cwd: project.path })
       res.json(issues)
     } catch (err) {
       console.error('[project-router] issues error:', err)

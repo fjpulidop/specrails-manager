@@ -357,7 +357,7 @@ if (isHubMode) {
       }
       const search = _req.query.search as string | undefined
       const label = _req.query.label as string | undefined
-      const issues = fetchIssues(tracker, { search, label, repo: config.project.repo })
+      const issues = fetchIssues(tracker, { search, label, repo: config.project.repo, cwd: process.cwd() })
       res.json(issues)
     } catch (err) {
       console.error('[issues] error:', err)
