@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is this
 
-specrails-manager is a local dashboard and CLI for managing multiple [specrails](https://github.com/fjpulidop/specrails) projects from a single interface. It visualizes AI pipeline phases (Architect → Developer → Reviewer → Ship), streams Claude CLI logs in real-time, and provides job queues, analytics, and chat per project.
+specrails-hub is a local dashboard and CLI for managing multiple [specrails](https://github.com/fjpulidop/specrails) projects from a single interface. It visualizes AI pipeline phases (Architect → Developer → Reviewer → Ship), streams Claude CLI logs in real-time, and provides job queues, analytics, and chat per project.
 
 ## Commands
 

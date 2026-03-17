@@ -1,4 +1,4 @@
-# specrails manager
+# specrails hub
 
 A local dashboard and CLI for managing all your [specrails](https://github.com/fjpulidop/specrails) projects from a single interface. Visualizes the AI pipeline phases (Architect, Developer, Reviewer, Ship), streams logs in real-time, and lets you launch commands from the browser or terminal.
 
@@ -21,7 +21,7 @@ A local dashboard and CLI for managing all your [specrails](https://github.com/f
 ## Installation
 
 ```bash
-npm install -g @specrails/manager
+npm install -g @specrails/hub
 ```
 
 ## Quick Start
@@ -164,8 +164,8 @@ All under `/api/projects/:projectId/`:
 ## Development
 
 ```bash
-git clone https://github.com/fjpulidop/specrails-manager.git
-cd specrails-manager
+git clone https://github.com/fjpulidop/specrails-hub.git
+cd specrails-hub
 npm install          # install root (server + CLI) dependencies
 cd client && npm install && cd ..   # install client dependencies separately
 npm run dev          # starts server (4200) + client (4201) concurrently
@@ -185,7 +185,7 @@ npm run dev          # starts server (4200) + client (4201) concurrently
 ### Project structure
 
 ```
-specrails-manager/
+specrails-hub/
 ├── server/
 │   ├── index.ts              # hub entry point
 │   ├── hub-db.ts             # hub SQLite (project registry)
