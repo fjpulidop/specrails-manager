@@ -108,8 +108,8 @@ export class ProjectRegistry {
       this._broadcast(enriched as WsMessage)
     }
 
-    const queueManager = new QueueManager(boundBroadcast, db)
-    const chatManager = new ChatManager(boundBroadcast, db)
+    const queueManager = new QueueManager(boundBroadcast, db, undefined, project.path)
+    const chatManager = new ChatManager(boundBroadcast, db, project.path)
     const setupManager = new SetupManager(boundBroadcast)
 
     // Load commands for this project

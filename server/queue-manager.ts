@@ -83,8 +83,9 @@ export class QueueManager {
   private _db: any
   private _logBuffer: LogMessage[]
   private _commands: CommandInfo[]
+  private _cwd: string | undefined
 
-  constructor(broadcast: (msg: WsMessage) => void, db?: any, commands?: CommandInfo[]) {
+  constructor(broadcast: (msg: WsMessage) => void, db?: any, commands?: CommandInfo[], cwd?: string) {
     this._queue = []
     this._jobs = new Map()
     this._activeProcess = null
@@ -96,6 +97,7 @@ export class QueueManager {
     this._db = db ?? null
     this._logBuffer = []
     this._commands = commands ?? []
+    this._cwd = cwd
 
     if (this._db) {
       this._restoreFromDb()
@@ -315,6 +317,7 @@ export class QueueManager {
       env: process.env,
       shell: false,
       stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: this._cwd,
     })
 
     this._activeProcess = child

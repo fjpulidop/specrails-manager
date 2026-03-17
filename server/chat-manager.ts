@@ -53,9 +53,12 @@ export class ChatManager {
   private _emittedProposals: Map<string, Set<string>>
   private _abortingConversations: Set<string>
 
-  constructor(broadcast: (msg: WsMessage) => void, db: DbInstance) {
+  private _cwd: string | undefined
+
+  constructor(broadcast: (msg: WsMessage) => void, db: DbInstance, cwd?: string) {
     this._broadcast = broadcast
     this._db = db
+    this._cwd = cwd
     this._activeProcesses = new Map()
     this._buffers = new Map()
     this._emittedProposals = new Map()
@@ -112,6 +115,7 @@ export class ChatManager {
       env: process.env,
       shell: false,
       stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: this._cwd,
     })
 
     this._activeProcesses.set(conversationId, child)
@@ -249,6 +253,7 @@ export class ChatManager {
         env: process.env,
         shell: false,
         stdio: ['ignore', 'pipe', 'pipe'],
+        cwd: this._cwd,
       })
 
       let titleText = ''
