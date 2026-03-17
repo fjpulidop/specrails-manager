@@ -32,6 +32,10 @@ type ProposalAction =
   | { type: 'CANCELLED' }
   | { type: 'RESET' }
 
+function stripToolMarkers(text: string): string {
+  return text.replace(/<!--tool:\w+-->/g, '').trim()
+}
+
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 
 const initialState: ProposalState = {
@@ -50,9 +54,9 @@ function proposalReducer(state: ProposalState, action: ProposalAction): Proposal
     case 'APPEND_STREAM':
       return { ...state, streamingText: state.streamingText + action.delta }
     case 'PROPOSAL_READY':
-      return { ...state, status: 'review', resultMarkdown: action.markdown, streamingText: '' }
+      return { ...state, status: 'review', resultMarkdown: stripToolMarkers(action.markdown), streamingText: '' }
     case 'PROPOSAL_REFINED':
-      return { ...state, status: 'review', resultMarkdown: action.markdown, streamingText: '' }
+      return { ...state, status: 'review', resultMarkdown: stripToolMarkers(action.markdown), streamingText: '' }
     case 'ISSUE_CREATED':
       return { ...state, status: 'created', issueUrl: action.issueUrl }
     case 'ERROR':

@@ -220,10 +220,12 @@ export class ProposalManager {
         if (sid) capturedSessionId = sid
       }
 
-      // Extract text from assistant events (skip thinking blocks)
       if (eventType === 'assistant') {
-        const msg = parsed.message as { content?: Array<{ type: string; text?: string }> } | undefined
-        const texts = (msg?.content ?? [])
+        const msg = parsed.message as { content?: Array<{ type: string; text?: string; name?: string }> } | undefined
+        const blocks = msg?.content ?? []
+
+        // Extract text from text blocks (skip thinking blocks)
+        const texts = blocks
           .filter((c) => c.type === 'text')
           .map((c) => c.text ?? '')
         const newText = texts.join('')
@@ -237,6 +239,19 @@ export class ProposalManager {
             delta: newText,
             timestamp: new Date().toISOString(),
           })
+        }
+
+        // Broadcast tool_use activity so the UI can show "reading codebase..."
+        for (const block of blocks) {
+          if (block.type === 'tool_use' && block.name) {
+            this._broadcast({
+              type: 'proposal_stream',
+              projectId: '',
+              proposalId,
+              delta: `<!--tool:${block.name}-->`,
+              timestamp: new Date().toISOString(),
+            })
+          }
         }
       }
     })

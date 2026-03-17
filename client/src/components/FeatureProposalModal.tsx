@@ -93,6 +93,15 @@ export function FeatureProposalModal({ open, onClose }: FeatureProposalModalProp
 
   const isStreaming = state.status === 'exploring' || state.status === 'refining'
 
+  // Parse tool activity markers from streamingText (<!--tool:ToolName-->)
+  const toolMatches = state.streamingText.match(/<!--tool:(\w+)-->/g) ?? []
+  const lastTool = toolMatches.length > 0
+    ? toolMatches[toolMatches.length - 1].replace(/<!--tool:|-->/g, '')
+    : null
+  const toolCount = toolMatches.length
+  // Strip tool markers from display text
+  const displayStreamingText = state.streamingText.replace(/<!--tool:\w+-->/g, '').trim()
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
       <DialogContent className="max-w-3xl glass-card">
@@ -145,18 +154,25 @@ export function FeatureProposalModal({ open, onClose }: FeatureProposalModalProp
                 {idea}
               </div>
               <div className="max-h-[400px] overflow-y-auto space-y-2">
-                {state.streamingText ? (
+                {displayStreamingText ? (
                   <div className="rounded-lg px-3 py-2 text-xs bg-muted/40">
                     <div className={MD_CLASSES}>
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{state.streamingText}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayStreamingText}</ReactMarkdown>
                     </div>
                     <span className="inline-block w-1.5 h-3 bg-dracula-purple ml-0.5 animate-pulse" />
                   </div>
                 ) : (
-                  <div className="rounded-lg px-3 py-2 bg-muted/40 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-dracula-purple animate-bounce [animation-delay:0ms]" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-dracula-purple animate-bounce [animation-delay:150ms]" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-dracula-purple animate-bounce [animation-delay:300ms]" />
+                  <div className="rounded-lg px-3 py-2 bg-muted/40 space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-dracula-purple animate-bounce [animation-delay:0ms]" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-dracula-purple animate-bounce [animation-delay:150ms]" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-dracula-purple animate-bounce [animation-delay:300ms]" />
+                    </div>
+                    {lastTool && (
+                      <p className="text-[10px] text-muted-foreground animate-pulse">
+                        Reading codebase... ({toolCount} {toolCount === 1 ? 'file' : 'files'} explored)
+                      </p>
+                    )}
                   </div>
                 )}
                 <div ref={bottomRef} />
@@ -237,18 +253,25 @@ export function FeatureProposalModal({ open, onClose }: FeatureProposalModalProp
                   </div>
                 </div>
               )}
-              {state.streamingText ? (
+              {displayStreamingText ? (
                 <div className="rounded-lg px-3 py-2 text-xs bg-muted/40">
                   <div className={MD_CLASSES}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{state.streamingText}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayStreamingText}</ReactMarkdown>
                   </div>
                   <span className="inline-block w-1.5 h-3 bg-dracula-purple ml-0.5 animate-pulse" />
                 </div>
               ) : (
-                <div className="rounded-lg px-3 py-2 bg-muted/40 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-dracula-purple animate-bounce [animation-delay:0ms]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-dracula-purple animate-bounce [animation-delay:150ms]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-dracula-purple animate-bounce [animation-delay:300ms]" />
+                <div className="rounded-lg px-3 py-2 bg-muted/40 space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-dracula-purple animate-bounce [animation-delay:0ms]" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-dracula-purple animate-bounce [animation-delay:150ms]" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-dracula-purple animate-bounce [animation-delay:300ms]" />
+                  </div>
+                  {lastTool && (
+                    <p className="text-[10px] text-muted-foreground animate-pulse">
+                      Reading codebase... ({toolCount} {toolCount === 1 ? 'file' : 'files'} explored)
+                    </p>
+                  )}
                 </div>
               )}
               <div ref={bottomRef} />
