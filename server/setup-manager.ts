@@ -33,13 +33,20 @@ export interface CheckpointStatus {
 }
 
 function checkFilesystem(projectPath: string): Partial<Record<string, boolean>> {
+  const hasAgents = existsSync(join(projectPath, '.claude', 'agents')) &&
+    hasFiles(join(projectPath, '.claude', 'agents'), /^sr-.*\.md$/)
+  const hasCommands = existsSync(join(projectPath, '.claude', 'commands', 'sr')) &&
+    hasFiles(join(projectPath, '.claude', 'commands', 'sr'), /\.md$/)
+
   return {
     base_install: existsSync(join(projectPath, '.specrails-version')),
-    product_discovery: existsSync(join(projectPath, '.claude', 'agents', 'personas')),
-    agent_generation: existsSync(join(projectPath, '.claude', 'agents')) &&
-      hasFiles(join(projectPath, '.claude', 'agents'), /^sr-.*\.md$/),
-    command_config: existsSync(join(projectPath, '.claude', 'commands', 'sr')),
-    final_verification: existsSync(join(projectPath, '.specrails-manifest.json')),
+    product_discovery: existsSync(join(projectPath, '.claude', 'agents', 'personas')) &&
+      hasFiles(join(projectPath, '.claude', 'agents', 'personas'), /\.md$/),
+    agent_generation: hasAgents,
+    command_config: hasCommands,
+    // Final verification requires BOTH the manifest AND actual generated artifacts
+    final_verification: existsSync(join(projectPath, '.specrails-manifest.json')) &&
+      hasAgents && hasCommands,
   }
 }
 
@@ -263,8 +270,13 @@ export class SetupManager {
         // Sync filesystem checkpoints
         this._syncFilesystemCheckpoints(projectId, projectPath)
 
-        // Check if setup is truly complete (.specrails-manifest.json exists)
-        const isComplete = existsSync(join(projectPath, '.specrails-manifest.json'))
+        // Check if setup is truly complete — manifest exists AND real artifacts generated
+        const hasAgents = existsSync(join(projectPath, '.claude', 'agents')) &&
+          hasFiles(join(projectPath, '.claude', 'agents'), /^sr-.*\.md$/)
+        const hasCommands = existsSync(join(projectPath, '.claude', 'commands', 'sr')) &&
+          hasFiles(join(projectPath, '.claude', 'commands', 'sr'), /\.md$/)
+        const isComplete = existsSync(join(projectPath, '.specrails-manifest.json')) &&
+          hasAgents && hasCommands
 
         if (isComplete) {
           const summary = computeSummary(projectPath)
