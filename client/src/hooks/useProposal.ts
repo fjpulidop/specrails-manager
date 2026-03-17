@@ -14,11 +14,17 @@ export type ProposalStatus =
   | 'cancelled'
   | 'error'
 
+export interface ConversationTurn {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 export interface ProposalState {
   proposalId: string | null
   status: ProposalStatus
   streamingText: string
   resultMarkdown: string
+  history: ConversationTurn[]
   issueUrl: string | null
   errorMessage: string | null
 }
@@ -27,6 +33,7 @@ type ProposalAction =
   | { type: 'START_EXPLORING'; proposalId: string }
   | { type: 'APPEND_STREAM'; delta: string }
   | { type: 'PROPOSAL_READY'; markdown: string }
+  | { type: 'START_REFINING'; feedback: string }
   | { type: 'PROPOSAL_REFINED'; markdown: string }
   | { type: 'CREATING_ISSUE' }
   | { type: 'ISSUE_CREATED'; issueUrl: string }
@@ -45,6 +52,7 @@ const initialState: ProposalState = {
   status: 'idle',
   streamingText: '',
   resultMarkdown: '',
+  history: [],
   issueUrl: null,
   errorMessage: null,
 }
@@ -52,13 +60,22 @@ const initialState: ProposalState = {
 function proposalReducer(state: ProposalState, action: ProposalAction): ProposalState {
   switch (action.type) {
     case 'START_EXPLORING':
-      return { ...state, proposalId: action.proposalId, status: 'exploring', streamingText: '', errorMessage: null }
+      return { ...state, proposalId: action.proposalId, status: 'exploring', streamingText: '', history: [], errorMessage: null }
     case 'APPEND_STREAM':
       return { ...state, streamingText: state.streamingText + action.delta }
-    case 'PROPOSAL_READY':
-      return { ...state, status: 'review', resultMarkdown: stripToolMarkers(action.markdown), streamingText: '' }
-    case 'PROPOSAL_REFINED':
-      return { ...state, status: 'review', resultMarkdown: stripToolMarkers(action.markdown), streamingText: '' }
+    case 'PROPOSAL_READY': {
+      const md = stripToolMarkers(action.markdown)
+      return { ...state, status: 'review', resultMarkdown: md, streamingText: '',
+        history: [...state.history, { role: 'assistant', content: md }] }
+    }
+    case 'START_REFINING':
+      return { ...state, status: 'refining', streamingText: '', errorMessage: null,
+        history: [...state.history, { role: 'user', content: action.feedback }] }
+    case 'PROPOSAL_REFINED': {
+      const md = stripToolMarkers(action.markdown)
+      return { ...state, status: 'review', resultMarkdown: md, streamingText: '',
+        history: [...state.history, { role: 'assistant', content: md }] }
+    }
     case 'CREATING_ISSUE':
       return { ...state, status: 'creating_issue', streamingText: '', errorMessage: null }
     case 'ISSUE_CREATED':
@@ -152,6 +169,7 @@ export function useProposal(projectId: string | null): {
 
   const sendRefinement = useCallback(async (feedback: string): Promise<void> => {
     if (!state.proposalId) return
+    dispatch({ type: 'START_REFINING', feedback })
     try {
       const res = await fetch(`${getApiBase()}/propose/${state.proposalId}/refine`, {
         method: 'POST',
@@ -161,10 +179,8 @@ export function useProposal(projectId: string | null): {
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { error?: string }
         dispatch({ type: 'ERROR', errorMessage: data.error ?? 'Failed to send refinement' })
-        return
       }
-      dispatch({ type: 'APPEND_STREAM', delta: '' })  // clear streaming indicator implicitly via status
-      // Status will transition via WS: refining -> review
+      // Success transitions via WS: proposal_refined -> review
     } catch (err) {
       dispatch({ type: 'ERROR', errorMessage: `Connection failed: ${(err as Error).message}` })
     }

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { CheckCircle } from 'lucide-react'
+import { CheckCircle, Send } from 'lucide-react'
 import { cn } from '../lib/utils'
 import {
   Dialog,
@@ -13,9 +13,6 @@ import {
 import { Button } from './ui/button'
 import { useProposal } from '../hooks/useProposal'
 import { useHub } from '../hooks/useHub'
-
-// ─── MD_CLASSES: verbatim copy from SetupChat.tsx ────────────────────────────
-// Per spec: copy the constant, do not import from SetupChat
 
 const MD_CLASSES = `prose prose-invert prose-xs max-w-none
   prose-p:my-1 prose-p:leading-relaxed
@@ -30,11 +27,28 @@ const MD_CLASSES = `prose prose-invert prose-xs max-w-none
   prose-td:px-2 prose-td:py-1 prose-td:border-border
   text-foreground/80`
 
-// ─── Props ────────────────────────────────────────────────────────────────────
-
 interface FeatureProposalModalProps {
   open: boolean
   onClose: () => void
+}
+
+// ─── Streaming indicator ─────────────────────────────────────────────────────
+
+function StreamingIndicator({ toolCount }: { toolCount: number }) {
+  return (
+    <div className="rounded-lg px-3 py-2 bg-muted/40 space-y-1.5">
+      <div className="flex items-center gap-1.5">
+        <span className="w-1.5 h-1.5 rounded-full bg-dracula-purple animate-bounce [animation-delay:0ms]" />
+        <span className="w-1.5 h-1.5 rounded-full bg-dracula-purple animate-bounce [animation-delay:150ms]" />
+        <span className="w-1.5 h-1.5 rounded-full bg-dracula-purple animate-bounce [animation-delay:300ms]" />
+      </div>
+      {toolCount > 0 && (
+        <p className="text-[10px] text-muted-foreground animate-pulse">
+          Reading codebase... ({toolCount} {toolCount === 1 ? 'file' : 'files'} explored)
+        </p>
+      )}
+    </div>
+  )
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -48,13 +62,19 @@ export function FeatureProposalModal({ open, onClose }: FeatureProposalModalProp
   const [refinementInput, setRefinementInput] = useState('')
   const [confirmCreate, setConfirmCreate] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Auto-scroll as streaming content arrives
+  // Auto-scroll
   useEffect(() => {
-    if (state.status === 'exploring' || state.status === 'refining' || state.status === 'creating_issue') {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [state.streamingText, state.status, state.history.length])
+
+  // Focus refinement textarea when entering review
+  useEffect(() => {
+    if (state.status === 'review') {
+      setTimeout(() => textareaRef.current?.focus(), 100)
     }
-  }, [state.streamingText, state.status])
+  }, [state.status])
 
   function handleClose() {
     if (state.status === 'exploring' || state.status === 'refining' || state.status === 'creating_issue') {
@@ -88,27 +108,17 @@ export function FeatureProposalModal({ open, onClose }: FeatureProposalModalProp
     setConfirmCreate(false)
   }
 
-  function handleProposeAnother() {
-    reset()
-    setIdea('')
-    setRefinementInput('')
-    setConfirmCreate(false)
-  }
-
-  const isStreaming = state.status === 'exploring' || state.status === 'refining' || state.status === 'creating_issue'
-
-  // Parse tool activity markers from streamingText (<!--tool:ToolName-->)
+  // Parse tool markers
   const toolMatches = state.streamingText.match(/<!--tool:(\w+)-->/g) ?? []
-  const lastTool = toolMatches.length > 0
-    ? toolMatches[toolMatches.length - 1].replace(/<!--tool:|-->/g, '')
-    : null
   const toolCount = toolMatches.length
-  // Strip tool markers from display text
   const displayStreamingText = state.streamingText.replace(/<!--tool:\w+-->/g, '').trim()
+
+  const isActive = state.status === 'exploring' || state.status === 'refining' || state.status === 'creating_issue'
+  const isConversational = state.status === 'review' || state.status === 'refining' || state.status === 'exploring'
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-      <DialogContent className="max-w-3xl glass-card">
+      <DialogContent className="max-w-3xl glass-card flex flex-col max-h-[85vh]">
 
         {/* ─── idle: input step ──────────────────────────────────────────── */}
         {state.status === 'idle' && (
@@ -147,88 +157,95 @@ export function FeatureProposalModal({ open, onClose }: FeatureProposalModalProp
           </>
         )}
 
-        {/* ─── exploring: streaming step ────────────────────────────────── */}
-        {state.status === 'exploring' && (
+        {/* ─── Conversational view (exploring, review, refining) ─────────── */}
+        {isConversational && (
           <>
             <DialogHeader>
-              <DialogTitle>Exploring your idea...</DialogTitle>
+              <DialogTitle>
+                {state.status === 'exploring' ? 'Exploring your idea...'
+                  : state.status === 'refining' ? 'Refining proposal...'
+                  : 'Review Proposal'}
+              </DialogTitle>
             </DialogHeader>
-            <div className="space-y-3">
-              <div className="text-xs text-muted-foreground bg-muted/20 rounded px-2 py-1 italic">
-                {idea}
+
+            {/* Chat-like scrollable area */}
+            <div className="flex-1 overflow-y-auto space-y-3 min-h-0 max-h-[50vh] pr-1">
+              {/* Original idea */}
+              <div className="flex justify-end">
+                <div className="max-w-[85%] rounded-lg px-3 py-2 text-xs bg-dracula-purple/20 border border-dracula-purple/30">
+                  {idea}
+                </div>
               </div>
-              <div className="max-h-[400px] overflow-y-auto space-y-2">
-                {displayStreamingText ? (
-                  <div className="rounded-lg px-3 py-2 text-xs bg-muted/40">
+
+              {/* Conversation history */}
+              {state.history.map((turn, i) => (
+                <div key={i} className={cn('flex', turn.role === 'user' ? 'justify-end' : 'justify-start')}>
+                  {turn.role === 'user' ? (
+                    <div className="max-w-[85%] rounded-lg px-3 py-2 text-xs bg-dracula-purple/20 border border-dracula-purple/30">
+                      {turn.content}
+                    </div>
+                  ) : (
+                    <div className="w-full rounded-lg px-3 py-2 text-xs bg-muted/40">
+                      <div className={MD_CLASSES}>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{turn.content}</ReactMarkdown>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* Live streaming content (during exploring or refining) */}
+              {isActive && (
+                displayStreamingText ? (
+                  <div className="w-full rounded-lg px-3 py-2 text-xs bg-muted/40">
                     <div className={MD_CLASSES}>
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayStreamingText}</ReactMarkdown>
                     </div>
                     <span className="inline-block w-1.5 h-3 bg-dracula-purple ml-0.5 animate-pulse" />
                   </div>
                 ) : (
-                  <div className="rounded-lg px-3 py-2 bg-muted/40 space-y-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-dracula-purple animate-bounce [animation-delay:0ms]" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-dracula-purple animate-bounce [animation-delay:150ms]" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-dracula-purple animate-bounce [animation-delay:300ms]" />
-                    </div>
-                    {lastTool && (
-                      <p className="text-[10px] text-muted-foreground animate-pulse">
-                        Reading codebase... ({toolCount} {toolCount === 1 ? 'file' : 'files'} explored)
-                      </p>
-                    )}
-                  </div>
-                )}
-                <div ref={bottomRef} />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="ghost" size="sm" onClick={handleClose}>Cancel</Button>
-            </DialogFooter>
-          </>
-        )}
+                  <StreamingIndicator toolCount={toolCount} />
+                )
+              )}
 
-        {/* ─── review: review and refine step ──────────────────────────── */}
-        {state.status === 'review' && (
-          <>
-            <DialogHeader>
-              <DialogTitle>Review Proposal</DialogTitle>
-            </DialogHeader>
-            <div className="max-h-[400px] overflow-y-auto">
-              <div className="rounded-lg px-3 py-2 text-xs bg-muted/40">
-                <div className={MD_CLASSES}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{state.resultMarkdown}</ReactMarkdown>
+              <div ref={bottomRef} />
+            </div>
+
+            {/* Input area */}
+            {state.status === 'review' && (
+              <div className="border-t border-border/30 pt-3">
+                <div className="flex gap-2 items-end">
+                  <textarea
+                    ref={textareaRef}
+                    aria-label="Refinement feedback"
+                    className={cn(
+                      'flex-1 resize-none rounded-md border border-border/50 bg-background/50',
+                      'px-3 py-2 text-xs placeholder:text-muted-foreground',
+                      'focus:outline-none focus:ring-1 focus:ring-dracula-purple/50',
+                      'min-h-[48px] max-h-24'
+                    )}
+                    placeholder="Ask for changes, add constraints, refine scope..."
+                    value={refinementInput}
+                    onChange={(e) => setRefinementInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && e.metaKey) { e.preventDefault(); handleRefine() }
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-8 p-0 shrink-0"
+                    onClick={handleRefine}
+                    disabled={!refinementInput.trim()}
+                    title="Send refinement (Cmd+Enter)"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </Button>
                 </div>
+                <p className="text-[10px] text-muted-foreground mt-1">Cmd+Enter to send</p>
               </div>
-            </div>
-            <div className="border-t border-border/30 pt-3 space-y-2">
-              <div className="flex gap-2">
-                <textarea
-                  aria-label="Refinement feedback"
-                  className={cn(
-                    'flex-1 resize-none rounded-md border border-border/50 bg-background/50',
-                    'px-3 py-2 text-xs placeholder:text-muted-foreground',
-                    'focus:outline-none focus:ring-1 focus:ring-dracula-purple/50',
-                    'min-h-[60px] max-h-32'
-                  )}
-                  placeholder="Suggest refinements..."
-                  value={refinementInput}
-                  onChange={(e) => setRefinementInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && e.metaKey) { e.preventDefault(); handleRefine() }
-                  }}
-                />
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="self-end"
-                  onClick={handleRefine}
-                  disabled={!refinementInput.trim()}
-                >
-                  Refine
-                </Button>
-              </div>
-            </div>
+            )}
+
             <DialogFooter>
               {confirmCreate ? (
                 <>
@@ -246,20 +263,22 @@ export function FeatureProposalModal({ open, onClose }: FeatureProposalModalProp
                 <>
                   <Button variant="ghost" size="sm" onClick={handleStartOver}>Start Over</Button>
                   <Button variant="ghost" size="sm" onClick={handleClose}>Cancel</Button>
-                  <Button
-                    size="sm"
-                    className="bg-green-600 hover:bg-green-700 text-white"
-                    onClick={() => setConfirmCreate(true)}
-                  >
-                    Create GitHub Issue
-                  </Button>
+                  {state.status === 'review' && (
+                    <Button
+                      size="sm"
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                      onClick={() => setConfirmCreate(true)}
+                    >
+                      Create GitHub Issue
+                    </Button>
+                  )}
                 </>
               )}
             </DialogFooter>
           </>
         )}
 
-        {/* ─── creating_issue: issue creation in progress ────────────── */}
+        {/* ─── creating_issue ────────────────────────────────────────────── */}
         {state.status === 'creating_issue' && (
           <>
             <DialogHeader>
@@ -281,50 +300,7 @@ export function FeatureProposalModal({ open, onClose }: FeatureProposalModalProp
           </>
         )}
 
-        {/* ─── refining: refinement streaming step ─────────────────────── */}
-        {state.status === 'refining' && (
-          <>
-            <DialogHeader>
-              <DialogTitle>Refining proposal...</DialogTitle>
-            </DialogHeader>
-            <div className="max-h-[400px] overflow-y-auto space-y-3">
-              {state.resultMarkdown && (
-                <div className="rounded-lg px-3 py-2 text-xs bg-muted/40 opacity-50">
-                  <div className={MD_CLASSES}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{state.resultMarkdown}</ReactMarkdown>
-                  </div>
-                </div>
-              )}
-              {displayStreamingText ? (
-                <div className="rounded-lg px-3 py-2 text-xs bg-muted/40">
-                  <div className={MD_CLASSES}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayStreamingText}</ReactMarkdown>
-                  </div>
-                  <span className="inline-block w-1.5 h-3 bg-dracula-purple ml-0.5 animate-pulse" />
-                </div>
-              ) : (
-                <div className="rounded-lg px-3 py-2 bg-muted/40 space-y-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-dracula-purple animate-bounce [animation-delay:0ms]" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-dracula-purple animate-bounce [animation-delay:150ms]" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-dracula-purple animate-bounce [animation-delay:300ms]" />
-                  </div>
-                  {lastTool && (
-                    <p className="text-[10px] text-muted-foreground animate-pulse">
-                      Reading codebase... ({toolCount} {toolCount === 1 ? 'file' : 'files'} explored)
-                    </p>
-                  )}
-                </div>
-              )}
-              <div ref={bottomRef} />
-            </div>
-            <DialogFooter>
-              <Button variant="ghost" size="sm" onClick={handleClose}>Cancel</Button>
-            </DialogFooter>
-          </>
-        )}
-
-        {/* ─── created: success step ────────────────────────────────────── */}
+        {/* ─── created: success ──────────────────────────────────────────── */}
         {state.status === 'created' && (
           <>
             <DialogHeader>
@@ -347,13 +323,13 @@ export function FeatureProposalModal({ open, onClose }: FeatureProposalModalProp
               )}
             </div>
             <DialogFooter>
-              <Button variant="ghost" size="sm" onClick={handleProposeAnother}>Propose Another</Button>
+              <Button variant="ghost" size="sm" onClick={() => { reset(); setIdea(''); setRefinementInput(''); setConfirmCreate(false) }}>Propose Another</Button>
               <Button size="sm" onClick={handleClose}>Done</Button>
             </DialogFooter>
           </>
         )}
 
-        {/* ─── error step ───────────────────────────────────────────────── */}
+        {/* ─── error ─────────────────────────────────────────────────────── */}
         {state.status === 'error' && (
           <>
             <DialogHeader>
@@ -369,7 +345,7 @@ export function FeatureProposalModal({ open, onClose }: FeatureProposalModalProp
           </>
         )}
 
-        {/* ─── cancelled step ───────────────────────────────────────────── */}
+        {/* ─── cancelled ─────────────────────────────────────────────────── */}
         {state.status === 'cancelled' && (
           <>
             <DialogHeader>
@@ -384,9 +360,6 @@ export function FeatureProposalModal({ open, onClose }: FeatureProposalModalProp
             </DialogFooter>
           </>
         )}
-
-        {/* Suppress unused variable warning for isStreaming — used for scroll effect */}
-        {isStreaming && null}
       </DialogContent>
     </Dialog>
   )
