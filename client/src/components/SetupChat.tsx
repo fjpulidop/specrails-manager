@@ -1,7 +1,22 @@
 import { useRef, useEffect, useState } from 'react'
 import { Send, Loader2 } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { cn } from '../lib/utils'
 import { Button } from './ui/button'
+
+const MD_CLASSES = `prose prose-invert prose-xs max-w-none
+  prose-p:my-1 prose-p:leading-relaxed
+  prose-headings:mt-2 prose-headings:mb-1 prose-headings:text-sm prose-headings:font-semibold
+  prose-ul:my-1 prose-ol:my-1 prose-li:my-0
+  prose-code:text-cyan-300 prose-code:text-[10px] prose-code:bg-muted/40 prose-code:px-1 prose-code:py-0.5 prose-code:rounded
+  prose-pre:my-1 prose-pre:bg-muted/30 prose-pre:rounded-md prose-pre:p-2 prose-pre:text-[10px]
+  prose-strong:text-foreground prose-em:text-foreground/70
+  prose-table:my-2 prose-table:text-[10px]
+  prose-thead:border-border prose-thead:bg-muted/30
+  prose-th:px-2 prose-th:py-1 prose-th:text-left prose-th:font-semibold
+  prose-td:px-2 prose-td:py-1 prose-td:border-border
+  text-foreground/80`
 
 export interface SetupChatMessage {
   role: 'assistant' | 'user'
@@ -86,7 +101,13 @@ export function SetupChat({
                   : 'bg-muted/40 text-foreground'
               )}
             >
-              <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+              {msg.role === 'assistant' ? (
+                <div className={MD_CLASSES}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
+                </div>
+              ) : (
+                <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+              )}
             </div>
           </div>
         ))}
@@ -95,7 +116,9 @@ export function SetupChat({
         {isStreaming && streamingText && (
           <div className="flex justify-start">
             <div className="max-w-[85%] rounded-lg px-3 py-2 text-xs bg-muted/40 text-foreground">
-              <p className="whitespace-pre-wrap leading-relaxed">{streamingText}</p>
+              <div className={MD_CLASSES}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingText}</ReactMarkdown>
+              </div>
               <span className="inline-block w-1.5 h-3 bg-dracula-purple ml-0.5 animate-pulse" />
             </div>
           </div>
