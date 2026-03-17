@@ -265,27 +265,15 @@ export function FeatureProposalModal({ open, onClose }: FeatureProposalModalProp
             <DialogHeader>
               <DialogTitle>Creating GitHub Issue...</DialogTitle>
             </DialogHeader>
-            <div className="max-h-[400px] overflow-y-auto space-y-2">
-              {displayStreamingText ? (
-                <div className="rounded-lg px-3 py-2 text-xs bg-muted/40">
-                  <div className={MD_CLASSES}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayStreamingText}</ReactMarkdown>
-                  </div>
-                  <span className="inline-block w-1.5 h-3 bg-dracula-purple ml-0.5 animate-pulse" />
-                </div>
-              ) : (
-                <div className="rounded-lg px-3 py-2 bg-muted/40 space-y-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-bounce [animation-delay:0ms]" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-bounce [animation-delay:150ms]" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-bounce [animation-delay:300ms]" />
-                  </div>
-                  <p className="text-[10px] text-muted-foreground animate-pulse">
-                    Creating issue via GitHub CLI...
-                  </p>
-                </div>
-              )}
-              <div ref={bottomRef} />
+            <div className="py-6 flex flex-col items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-bounce [animation-delay:0ms]" />
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-bounce [animation-delay:150ms]" />
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-bounce [animation-delay:300ms]" />
+              </div>
+              <p className="text-xs text-muted-foreground animate-pulse">
+                Creating issue via GitHub CLI...
+              </p>
             </div>
             <DialogFooter>
               <Button variant="ghost" size="sm" onClick={handleClose}>Cancel</Button>
