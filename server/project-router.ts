@@ -357,7 +357,11 @@ export function createProjectRouter(registry: ProjectRegistry): Router {
   router.get('/:projectId/setup/checkpoints', (req: Request, res: Response) => {
     const { project, setupManager } = ctx(req)
     const checkpoints = setupManager.getCheckpointStatus(project.id, project.path)
-    res.json({ checkpoints })
+    res.json({
+      checkpoints,
+      isInstalling: setupManager.isInstalling(project.id),
+      isSettingUp: setupManager.isSettingUp(project.id),
+    })
   })
 
   router.post('/:projectId/setup/abort', (req: Request, res: Response) => {

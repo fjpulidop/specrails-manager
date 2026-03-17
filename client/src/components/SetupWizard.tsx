@@ -266,6 +266,53 @@ export function SetupWizard({ project, onComplete: rawOnComplete, onSkip: rawOnS
     }
   }, [project.id])
 
+  // On remount after tab switch: check if the install/setup finished while we were away
+  useEffect(() => {
+    if (wizardStep.step !== 'installing' && wizardStep.step !== 'setup') return
+
+    async function syncState() {
+      try {
+        const res = await fetch(`/api/projects/${project.id}/setup/checkpoints`)
+        if (!res.ok) return
+        const data = await res.json() as { checkpoints: CheckpointState[]; isInstalling: boolean; isSettingUp: boolean }
+
+        // Update checkpoints from server
+        if (data.checkpoints) {
+          setCheckpoints(data.checkpoints)
+        }
+
+        // If we were on 'installing' but install finished, advance to setup
+        if (wizardStep.step === 'installing' && !data.isInstalling) {
+          const hasBaseInstall = data.checkpoints?.some(
+            (cp: CheckpointState) => cp.key === 'base_install' && cp.status === 'done'
+          )
+          if (hasBaseInstall) {
+            setWizardStep({ step: 'setup' })
+            pendingSetupStart.current = true
+          }
+        }
+
+        // If setup finished and all artifacts exist, complete
+        const finalDone = data.checkpoints?.find(
+          (cp: CheckpointState) => cp.key === 'final_verification'
+        )
+        if (finalDone?.status === 'done' && !data.isSettingUp) {
+          // Fetch summary
+          const summaryRes = await fetch(`/api/projects/${project.id}/setup/checkpoints`)
+          if (summaryRes.ok) {
+            // Just mark complete — the summary will be recalculated
+            setCheckpoints((prev) => prev.map((cp) => ({ ...cp, status: 'done' as const })))
+            setWizardStep({ step: 'complete', summary: { agents: 0, personas: 0, commands: 0 } })
+          }
+        }
+      } catch {
+        // non-fatal
+      }
+    }
+    syncState()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const { registerHandler, unregisterHandler } = useSharedWebSocket()
 
   // ─── WebSocket message handler ──────────────────────────────────────────────
