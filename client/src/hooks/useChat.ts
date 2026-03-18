@@ -3,6 +3,7 @@ import { useSharedWebSocket } from './useSharedWebSocket'
 import type { ChatConversationSummary, ChatMessage } from '../types'
 import { getApiBase } from '../lib/api'
 import { useHub } from './useHub'
+import { toast } from 'sonner'
 
 const PANEL_OPEN_KEY = 'specrails.chatPanelOpen'
 
@@ -264,8 +265,13 @@ export function useChat(): UseChatReturn {
       })
     } catch {
       setConversations((prev) =>
-        prev.map((c) => (c.id === conversationId ? { ...c, isStreaming: false } : c))
+        prev.map((c) =>
+          c.id === conversationId
+            ? { ...c, isStreaming: false, messages: c.messages.filter((m) => m.id !== optimisticMsg.id) }
+            : c
+        )
       )
+      toast.error('Failed to send message')
     }
   }, [])
 

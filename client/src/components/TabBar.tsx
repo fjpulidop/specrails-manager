@@ -1,4 +1,5 @@
 import { Plus, X, FolderOpen } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
 import { cn } from '../lib/utils'
 import { useHub } from '../hooks/useHub'
 import type { HubProject } from '../hooks/useHub'
@@ -18,6 +19,33 @@ function ProjectTab({
   onSelect: () => void
   onRemove: () => void
 }) {
+  const [confirming, setConfirming] = useState(false)
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current)
+    }
+  }, [])
+
+  function handleRemoveClick(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (confirming) {
+      // Second click within 3s — actually remove
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current)
+      setConfirming(false)
+      onRemove()
+    } else {
+      // First click — enter confirm state, auto-reset after 3s
+      setConfirming(true)
+      confirmTimerRef.current = setTimeout(() => {
+        setConfirming(false)
+        confirmTimerRef.current = null
+      }, 3000)
+    }
+  }
+
   return (
     <button
       type="button"
@@ -33,19 +61,19 @@ function ProjectTab({
       <span className="max-w-[120px] truncate">{project.name}</span>
       <button
         type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          onRemove()
-        }}
+        onClick={handleRemoveClick}
         className={cn(
-          'flex-shrink-0 w-3.5 h-3.5 flex items-center justify-center rounded-sm transition-opacity',
-          isActive
+          'flex-shrink-0 flex items-center justify-center rounded-sm transition-all',
+          confirming
+            ? 'px-1 h-4 text-[10px] text-destructive bg-destructive/10 hover:bg-destructive/20 opacity-100'
+            : 'w-3.5 h-3.5',
+          !confirming && (isActive
             ? 'opacity-50 hover:opacity-100 hover:bg-muted'
-            : 'opacity-0 group-hover:opacity-50 hover:!opacity-100 hover:bg-muted'
+            : 'opacity-0 group-hover:opacity-50 hover:!opacity-100 hover:bg-muted')
         )}
-        aria-label={`Remove ${project.name}`}
+        aria-label={confirming ? `Confirm remove ${project.name}` : `Remove ${project.name}`}
       >
-        <X className="w-2.5 h-2.5" />
+        {confirming ? 'confirm?' : <X className="w-2.5 h-2.5" />}
       </button>
     </button>
   )
