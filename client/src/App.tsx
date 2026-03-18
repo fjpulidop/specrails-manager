@@ -21,15 +21,25 @@ function useHubMode(): boolean {
   const [isHub, setIsHub] = useState(false)
 
   useEffect(() => {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 5000)
+
     async function detect() {
       try {
-        const res = await fetch('/api/hub/state')
+        const res = await fetch('/api/hub/state', { signal: controller.signal })
         setIsHub(res.ok)
       } catch {
         setIsHub(false)
+      } finally {
+        clearTimeout(timeout)
       }
     }
+
     detect()
+    return () => {
+      controller.abort()
+      clearTimeout(timeout)
+    }
   }, [])
 
   return isHub

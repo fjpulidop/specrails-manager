@@ -97,7 +97,11 @@ export default function JobDetailPage() {
         payload: JSON.stringify({ line: msg.line }),
         timestamp: msg.timestamp as string,
       }
-      setEvents((prev) => [...prev, syntheticEvent])
+      setEvents((prev) => {
+        const next = [...prev, syntheticEvent]
+        // Cap at 10,000 entries — keep the last 8,000 to avoid unbounded growth
+        return next.length > 10000 ? next.slice(next.length - 8000) : next
+      })
     } else if (msg.type === 'phase') {
       const phaseName = msg.phase as string
       const phaseState = msg.state as PhaseState

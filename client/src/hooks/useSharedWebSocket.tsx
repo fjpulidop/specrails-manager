@@ -41,6 +41,7 @@ export function SharedWebSocketProvider({ url, children }: { url: string; childr
 
       ws.onopen = () => {
         if (disposed) { ws.close(); return }
+        // Reset retry count on successful connection
         retryCountRef.current = 0
         setConnectionStatus('connected')
       }
@@ -64,7 +65,9 @@ export function SharedWebSocketProvider({ url, children }: { url: string; childr
         wsRef.current = null
         const attempt = retryCountRef.current
         if (attempt >= BACKOFF_DELAYS.length) {
-          setConnectionStatus('disconnected')
+          // Continue retrying every 30s instead of giving up
+          setConnectionStatus('connecting')
+          retryTimeoutRef.current = setTimeout(connect, 30000)
           return
         }
         setConnectionStatus('connecting')
