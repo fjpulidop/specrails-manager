@@ -2,7 +2,7 @@
   "name": "specrails-hub",
   "version": "1.1.0",
   "bin": {
-    "specrails-hub": "./cli/dist/specrails-hub.js"
+    "specrails-hub": "cli/dist/specrails-hub.js"
   },
   "files": [
     "cli/dist",
