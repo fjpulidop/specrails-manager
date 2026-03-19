@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.1](https://github.com/fjpulidop/specrails-hub/compare/v1.3.0...v1.3.1) (2026-03-19)
+
+
+### Bug Fixes
+
+* downgrade client vitest to ^3.0.0 to resolve esbuild conflict ([b9dac6e](https://github.com/fjpulidop/specrails-hub/commit/b9dac6eb5a2ed0d39754ad5efdde5705ca03fb15))
+* regenerate client lockfile to restore esbuild@0.27.4 for vitest ([2b6ab39](https://github.com/fjpulidop/specrails-hub/commit/2b6ab394642b78190bbeb39785b5acd0238bd35c))
+
 ## [1.3.0](https://github.com/fjpulidop/specrails-hub/compare/v1.2.1...v1.3.0) (2026-03-19)
 
 
