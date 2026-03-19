@@ -4,6 +4,7 @@ import fs from 'fs'
 import type { WsMessage } from './types'
 import type { ProjectRegistry } from './project-registry'
 import { getHubSetting, setHubSetting, listProjects } from './hub-db'
+import { createSpecrailsTechClient } from './specrails-tech-client'
 
 function slugify(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -121,16 +122,88 @@ export function createHubRouter(
   // GET /api/hub/settings — get hub-level settings
   router.get('/settings', (_req, res) => {
     const port = getHubSetting(registry.hubDb, 'port') ?? '4200'
-    res.json({ port: parseInt(port, 10) })
+    const specrailsTechUrl =
+      getHubSetting(registry.hubDb, 'specrails_tech_url') ??
+      process.env.SPECRAILS_TECH_URL ??
+      'http://localhost:3000'
+    res.json({ port: parseInt(port, 10), specrailsTechUrl })
   })
 
   // PUT /api/hub/settings — update hub-level settings
   router.put('/settings', (req, res) => {
-    const { port } = req.body ?? {}
+    const { port, specrailsTechUrl } = req.body ?? {}
     if (port !== undefined) {
       setHubSetting(registry.hubDb, 'port', String(port))
     }
+    if (specrailsTechUrl !== undefined && typeof specrailsTechUrl === 'string') {
+      setHubSetting(registry.hubDb, 'specrails_tech_url', specrailsTechUrl.trim())
+    }
     res.json({ ok: true })
+  })
+
+  // ─── specrails-tech proxy routes ────────────────────────────────────────────
+
+  function getSpecrailsTechClient() {
+    const url =
+      getHubSetting(registry.hubDb, 'specrails_tech_url') ??
+      process.env.SPECRAILS_TECH_URL ??
+      'http://localhost:3000'
+    return createSpecrailsTechClient(url)
+  }
+
+  // GET /api/hub/specrails-tech/status — health + connected flag
+  router.get('/specrails-tech/status', async (_req, res) => {
+    const client = getSpecrailsTechClient()
+    const result = await client.health()
+    if (!result.connected) {
+      res.json({ connected: false, error: result.error })
+      return
+    }
+    res.json({ connected: true, data: result.data })
+  })
+
+  // GET /api/hub/specrails-tech/agents — list agents
+  router.get('/specrails-tech/agents', async (_req, res) => {
+    const client = getSpecrailsTechClient()
+    const result = await client.listAgents()
+    if (!result.connected) {
+      res.json({ connected: false, error: result.error, data: [] })
+      return
+    }
+    res.json({ connected: true, data: result.data })
+  })
+
+  // GET /api/hub/specrails-tech/agents/:slug — agent detail
+  router.get('/specrails-tech/agents/:slug', async (req, res) => {
+    const client = getSpecrailsTechClient()
+    const result = await client.getAgent(req.params.slug)
+    if (!result.connected) {
+      res.status(503).json({ connected: false, error: result.error })
+      return
+    }
+    res.json({ connected: true, data: result.data })
+  })
+
+  // GET /api/hub/specrails-tech/docs — list docs
+  router.get('/specrails-tech/docs', async (_req, res) => {
+    const client = getSpecrailsTechClient()
+    const result = await client.listDocs()
+    if (!result.connected) {
+      res.json({ connected: false, error: result.error, data: [] })
+      return
+    }
+    res.json({ connected: true, data: result.data })
+  })
+
+  // GET /api/hub/specrails-tech/docs/:page — doc page detail
+  router.get('/specrails-tech/docs/:page', async (req, res) => {
+    const client = getSpecrailsTechClient()
+    const result = await client.getDoc(req.params.page)
+    if (!result.connected) {
+      res.status(503).json({ connected: false, error: result.error })
+      return
+    }
+    res.json({ connected: true, data: result.data })
   })
 
   return router

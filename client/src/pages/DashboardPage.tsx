@@ -14,6 +14,7 @@ import { Badge } from '../components/ui/badge'
 import type { CommandInfo, JobSummary } from '../types'
 import { getApiBase } from '../lib/api'
 import { useHub } from '../hooks/useHub'
+import { SpecrailsTechPanel } from '../components/SpecrailsTechPanel'
 
 export default function DashboardPage() {
   const { activeProjectId } = useHub()
@@ -127,6 +128,10 @@ export default function DashboardPage() {
           onProposalClick={handleProposalClick}
           onProposalDelete={handleProposalDelete}
         />
+      </section>
+
+      <section>
+        <SpecrailsTechPanel />
       </section>
 
       <ImplementWizard

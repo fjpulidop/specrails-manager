@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Settings } from 'lucide-react'
 import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -14,6 +15,7 @@ import type { HubProject } from '../hooks/useHub'
 
 interface HubSettings {
   port: number
+  specrailsTechUrl: string
 }
 
 interface SettingsDialogProps {
@@ -50,6 +52,8 @@ export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const { projects, removeProject } = useHub()
   const [hubSettings, setHubSettings] = useState<HubSettings | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [specrailsTechUrl, setSpecrailsTechUrl] = useState('')
+  const [isSavingUrl, setIsSavingUrl] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -60,6 +64,7 @@ export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
         if (res.ok) {
           const data = await res.json() as HubSettings
           setHubSettings(data)
+          setSpecrailsTechUrl(data.specrailsTechUrl ?? 'http://localhost:3000')
         }
       } catch {
         // ignore
@@ -69,6 +74,27 @@ export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
     }
     load()
   }, [open])
+
+  async function handleSaveSpecrailsTechUrl() {
+    if (!specrailsTechUrl.trim()) return
+    setIsSavingUrl(true)
+    try {
+      const res = await fetch('/api/hub/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ specrailsTechUrl: specrailsTechUrl.trim() }),
+      })
+      if (res.ok) {
+        toast.success('specrails-tech URL saved')
+      } else {
+        toast.error('Failed to save URL')
+      }
+    } catch {
+      toast.error('Failed to save URL')
+    } finally {
+      setIsSavingUrl(false)
+    }
+  }
 
   async function handleRemoveProject(id: string) {
     try {
@@ -119,6 +145,35 @@ export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* specrails-tech config */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                specrails-tech
+              </h3>
+              <div className="rounded-md border border-border p-3 space-y-2">
+                <p className="text-[10px] text-muted-foreground">
+                  Base URL for the specrails-tech API (default: http://localhost:3000)
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    value={specrailsTechUrl}
+                    onChange={(e) => setSpecrailsTechUrl(e.target.value)}
+                    placeholder="http://localhost:3000"
+                    className="h-7 text-xs font-mono"
+                  />
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-7 text-xs shrink-0"
+                    disabled={isSavingUrl}
+                    onClick={handleSaveSpecrailsTechUrl}
+                  >
+                    Save
+                  </Button>
+                </div>
+              </div>
             </div>
 
             {/* Hub info */}
