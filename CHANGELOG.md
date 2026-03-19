@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/fjpulidop/specrails-hub/compare/v1.1.1...v1.2.0) (2026-03-19)
+
+
+### Features
+
+* allow hub commands without 'hub' prefix ([1db98ec](https://github.com/fjpulidop/specrails-hub/commit/1db98ece9bd9db0af3a2620bd921db34e9d0a020))
+* allow hub commands without 'hub' prefix ([08de911](https://github.com/fjpulidop/specrails-hub/commit/08de911fd9803b51b6773250a685482ff5e3380b))
+
 ## [1.1.1](https://github.com/fjpulidop/specrails-hub/compare/v1.1.0...v1.1.1) (2026-03-19)
 
 
