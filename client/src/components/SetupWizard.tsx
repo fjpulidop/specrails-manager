@@ -146,7 +146,7 @@ function InstallingStep({
         </div>
         <div>
           <h2 className="text-sm font-semibold">Installing specrails...</h2>
-          <p className="text-xs text-muted-foreground">Running npx specrails in your project</p>
+          <p className="text-xs text-muted-foreground">Running npx specrails-core in your project</p>
         </div>
       </div>
 

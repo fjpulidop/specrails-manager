@@ -169,7 +169,7 @@ export class SetupManager {
     this._pollTimers = new Map()
   }
 
-  // ─── Install: npx specrails ──────────────────────────────────────────────────
+  // ─── Install: npx specrails-core ─────────────────────────────────────────────
 
   startInstall(projectId: string, projectPath: string): void {
     if (this._installProcesses.has(projectId)) {
@@ -177,7 +177,7 @@ export class SetupManager {
       return
     }
 
-    const child = spawn('npx', ['specrails', 'init', '--yes'], {
+    const child = spawn('npx', ['specrails-core', 'init', '--yes'], {
       cwd: projectPath,
       env: process.env,
       shell: false,
@@ -209,7 +209,7 @@ export class SetupManager {
         this._broadcast({
           type: 'setup_error',
           projectId,
-          error: `npx specrails exited with code ${code ?? 'unknown'}`,
+          error: `npx specrails-core exited with code ${code ?? 'unknown'}`,
         })
       }
     })
