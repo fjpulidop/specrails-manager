@@ -9,6 +9,7 @@ import { ProjectRegistry } from './project-registry'
 import { createHubRouter } from './hub-router'
 import { createProjectRouter } from './project-router'
 import { createHooksRouter, getPhaseStates, getPhaseDefinitions } from './hooks'
+import { createDocsRouter } from './docs-router'
 import { QueueManager, ClaudeNotFoundError, JobNotFoundError, JobAlreadyTerminalError } from './queue-manager'
 import { initDb, listJobs, getJob, getJobEvents, getStats, purgeJobs,
   createConversation, listConversations, getConversation,
@@ -111,6 +112,10 @@ server.on('upgrade', (request, socket, head) => {
     wss.emit('connection', ws, request)
   })
 })
+
+// ─── Docs portal (available in all modes) ────────────────────────────────────
+
+app.use('/api/docs', createDocsRouter())
 
 // ─── Hub mode ─────────────────────────────────────────────────────────────────
 

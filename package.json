@@ -15,7 +15,8 @@
   "files": [
     "cli/dist",
     "server/dist",
-    "client/dist"
+    "client/dist",
+    "docs"
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",

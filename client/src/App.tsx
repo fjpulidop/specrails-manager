@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation, useNavigate, NavLink } from 'react-router-dom'
 import { RootLayout } from './components/RootLayout'
 import DashboardPage from './pages/DashboardPage'
 import JobDetailPage from './pages/JobDetailPage'
 import SettingsPage from './pages/SettingsPage'
 import AnalyticsPage from './pages/AnalyticsPage'
 import SettingsDialog from './pages/GlobalSettingsPage'
+import DocsPage from './pages/DocsPage'
 import { ProjectLayout } from './components/ProjectLayout'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { SetupWizard } from './components/SetupWizard'
@@ -14,6 +15,7 @@ import { AddProjectDialog } from './components/AddProjectDialog'
 import { SharedWebSocketProvider } from './hooks/useSharedWebSocket'
 import { HubProvider, useHub } from './hooks/useHub'
 import { WS_URL } from './lib/ws-url'
+import { cn } from './lib/utils'
 
 // ─── Hub mode detection ───────────────────────────────────────────────────────
 
@@ -107,13 +109,26 @@ function HubApp() {
           <span className="text-dracula-pink">rails</span>
           <span className="text-muted-foreground text-xs font-normal ml-1">/ hub</span>
         </span>
-        <button
-          type="button"
-          onClick={() => setSettingsOpen(true)}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          Settings
-        </button>
+        <div className="flex items-center gap-3">
+          <NavLink
+            to="/docs"
+            className={({ isActive }) =>
+              cn(
+                'text-xs transition-colors',
+                isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+              )
+            }
+          >
+            Docs
+          </NavLink>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Settings
+          </button>
+        </div>
       </div>
 
       {/* Project tabs */}
@@ -131,6 +146,11 @@ function HubApp() {
           />
         ) : (
           <Routes>
+            {/* Hub-level docs portal */}
+            <Route path="/docs" element={<DocsPage />} />
+            <Route path="/docs/:category/:slug" element={<DocsPage />} />
+
+            {/* Project routes */}
             {projects.length === 0 ? (
               <Route path="*" element={<WelcomeScreen onAddProject={() => setAddDialogOpen(true)} />} />
             ) : activeProject ? (
@@ -171,6 +191,8 @@ export default function App() {
         </HubProvider>
       ) : (
         <Routes>
+          <Route path="/docs" element={<DocsPage />} />
+          <Route path="/docs/:category/:slug" element={<DocsPage />} />
           <Route element={<RootLayout />}>
             <Route index element={<DashboardPage />} />
             <Route path="/jobs/:id" element={<JobDetailPage />} />
