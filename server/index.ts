@@ -509,12 +509,22 @@ if (isHubMode) {
   })
 }
 
+// ─── Serve built React client (production) ────────────────────────────────────
+
+const clientDist = path.resolve(__dirname, '../../client/dist')
+if (fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist))
+  app.get(/^(?!\/api|\/hooks).*/, (_req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'))
+  })
+}
+
 // ─── Start server ─────────────────────────────────────────────────────────────
 
 server.on('error', (err: NodeJS.ErrnoException) => {
   if (err.code === 'EADDRINUSE') {
     console.error(`[error] Port ${port} is already in use. Is another manager instance running?`)
-    console.error(`[error] Try stopping it first: srm hub stop`)
+    console.error(`[error] Try stopping it first: specrails-hub hub stop`)
     process.exit(1)
   }
   throw err

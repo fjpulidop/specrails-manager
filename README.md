@@ -10,7 +10,7 @@ A local dashboard and CLI for managing all your [specrails](https://github.com/f
 - **Command launcher** — organized into Discovery (propose-spec, auto-propose specs, auto-select specs) and Delivery (implement, batch-implement) sections; other commands available in a collapsible group
 - **Analytics** — cost, duration, token usage, and throughput metrics per project
 - **Conversations** — full-page chat interface with Claude, scoped per project
-- **`srm` CLI** — terminal bridge that auto-routes commands to the correct project
+- **`specrails-hub` CLI** — terminal bridge that auto-routes commands to the correct project
 
 ## Prerequisites
 
@@ -28,10 +28,10 @@ npm install -g @specrails/hub
 
 ```bash
 # Start the hub server
-srm hub start
+specrails-hub hub start
 
 # Register a project
-srm hub add /path/to/your/project
+specrails-hub hub add /path/to/your/project
 
 # Open in browser
 open http://localhost:4200
@@ -90,29 +90,29 @@ A single Express process (port 4200) manages all projects. Each project gets its
 - **Conversations** — Claude chat sessions scoped to the project
 - **Settings** (gear icon) — global hub configuration, registered projects
 
-## CLI: `srm`
+## CLI: `specrails-hub`
 
 ### Hub management
 
 | Command | Description |
 |---------|-------------|
-| `srm hub start [--port N]` | Start the hub server (default port 4200) |
-| `srm hub stop` | Stop the hub server |
-| `srm hub status` | Show hub state and registered projects |
-| `srm hub list` | List all registered projects |
-| `srm hub add <path>` | Register a project |
-| `srm hub remove <id>` | Unregister a project |
+| `specrails-hub hub start [--port N]` | Start the hub server (default port 4200) |
+| `specrails-hub hub stop` | Stop the hub server |
+| `specrails-hub hub status` | Show hub state and registered projects |
+| `specrails-hub hub list` | List all registered projects |
+| `specrails-hub hub add <path>` | Register a project |
+| `specrails-hub hub remove <id>` | Unregister a project |
 
 ### Running commands
 
 ```bash
 cd ~/repos/my-app
-srm implement #42          # auto-detects project from CWD
-srm product-backlog        # routes to the correct project
-srm "any raw prompt"       # passes directly to claude
+specrails-hub implement #42          # auto-detects project from CWD
+specrails-hub product-backlog        # routes to the correct project
+specrails-hub "any raw prompt"       # passes directly to claude
 ```
 
-`srm` detects which project you're in by matching your current directory against registered projects. If the hub isn't running, it falls back to invoking `claude` directly.
+`specrails-hub` detects which project you're in by matching your current directory against registered projects. If the hub isn't running, it falls back to invoking `claude` directly.
 
 ### Options
 
@@ -126,10 +126,10 @@ srm "any raw prompt"       # passes directly to claude
 ### Output
 
 ```
-[srm] running: /sr:implement #42
-[srm] routing via hub → project my-app (a1b2c3d4)
+[specrails-hub] running: /sr:implement #42
+[specrails-hub] routing via hub → project my-app (a1b2c3d4)
 ... (live claude output) ...
-[srm] done  duration: 4m32s  cost: $0.08  tokens: 12,400  exit: 0
+[specrails-hub] done  duration: 4m32s  cost: $0.08  tokens: 12,400  exit: 0
 ```
 
 ## API
@@ -178,7 +178,7 @@ npm run dev          # starts server (4200) + client (4201) concurrently
 | `npm run dev` | Start server + client with hot reload |
 | `npm run dev:server` | Server only (tsx watch) |
 | `npm run dev:client` | Client only (Vite) |
-| `npm run build` | Production build (client + CLI) |
+| `npm run build` | Production build (server + client + CLI) |
 | `npm run typecheck` | TypeScript check (server + client) |
 | `npm test` | Run tests (vitest) |
 
@@ -224,7 +224,7 @@ specrails-hub/
 │       └── lib/
 │           └── api.ts              # dynamic API base routing
 ├── cli/
-│   └── srm.ts                      # CLI bridge
+│   └── specrails-hub.ts            # CLI bridge
 ├── package.json
 ├── tsconfig.json
 └── vitest.config.ts

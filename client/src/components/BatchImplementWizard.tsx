@@ -1,6 +1,7 @@
 import { useReducer } from 'react'
 import { toast } from 'sonner'
 import { getApiBase } from '../lib/api'
+import type { IssueItem } from '../types'
 import {
   Dialog,
   DialogContent,
@@ -16,13 +17,13 @@ type WizardPath = 'from-issues' | 'free-form' | null
 
 interface BatchWizardState {
   path: WizardPath
-  selectedIssues: number[]
+  selectedIssues: IssueItem[]
   freeFormItems: Array<{ title: string; description: string }>
 }
 
 type BatchWizardAction =
   | { type: 'SELECT_PATH'; path: WizardPath }
-  | { type: 'SET_ISSUES'; issues: number[] }
+  | { type: 'SET_ISSUES'; issues: IssueItem[] }
   | { type: 'SET_ITEMS'; items: Array<{ title: string; description: string }> }
   | { type: 'RESET' }
 
@@ -66,7 +67,12 @@ export function BatchImplementWizard({ open, onClose }: BatchImplementWizardProp
         toast.error('Please select at least one issue')
         return
       }
-      command = `/sr:batch-implement ${state.selectedIssues.map((n) => `#${n}`).join(' ')}`
+      const issueArgs = state.selectedIssues.map((issue) => {
+        let text = `#${issue.number}: ${issue.title}`
+        if (issue.body?.trim()) text += `\n\n${issue.body.trim()}`
+        return text
+      }).join('\n\n---\n\n')
+      command = `/sr:batch-implement ${issueArgs}`
     } else {
       const validItems = state.freeFormItems.filter((item) => item.title.trim())
       if (validItems.length === 0) {

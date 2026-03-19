@@ -10,8 +10,8 @@ import type { IssueItem } from '../types'
 
 interface IssuePickerStepProps {
   multiSelect?: boolean
-  selectedIssues: number[]
-  onSelectionChange: (selected: number[]) => void
+  selectedIssues: IssueItem[]
+  onSelectionChange: (selected: IssueItem[]) => void
 }
 
 export function IssuePickerStep({ multiSelect = false, selectedIssues, onSelectionChange }: IssuePickerStepProps) {
@@ -48,15 +48,15 @@ export function IssuePickerStep({ multiSelect = false, selectedIssues, onSelecti
     return () => clearTimeout(timeout)
   }, [search])
 
-  function toggleIssue(num: number) {
+  function toggleIssue(issue: IssueItem) {
     if (multiSelect) {
-      if (selectedIssues.includes(num)) {
-        onSelectionChange(selectedIssues.filter((n) => n !== num))
+      if (selectedIssues.some((i) => i.number === issue.number)) {
+        onSelectionChange(selectedIssues.filter((i) => i.number !== issue.number))
       } else {
-        onSelectionChange([...selectedIssues, num])
+        onSelectionChange([...selectedIssues, issue])
       }
     } else {
-      onSelectionChange(selectedIssues.includes(num) ? [] : [num])
+      onSelectionChange(selectedIssues.some((i) => i.number === issue.number) ? [] : [issue])
     }
   }
 
@@ -110,12 +110,12 @@ export function IssuePickerStep({ multiSelect = false, selectedIssues, onSelecti
           </div>
         ) : (
           issues.map((issue) => {
-            const isSelected = selectedIssues.includes(issue.number)
+            const isSelected = selectedIssues.some((i) => i.number === issue.number)
             return (
               <button
                 key={issue.number}
                 type="button"
-                onClick={() => toggleIssue(issue.number)}
+                onClick={() => toggleIssue(issue)}
                 className={cn(
                   'w-full flex items-start gap-3 px-3 py-2 rounded-md text-left transition-colors',
                   isSelected
@@ -159,7 +159,7 @@ export function IssuePickerStep({ multiSelect = false, selectedIssues, onSelecti
         <p className="text-[10px] text-muted-foreground">
           {selectedIssues.length} issue{selectedIssues.length > 1 ? 's' : ''} selected
           {': '}
-          {selectedIssues.map((n) => `#${n}`).join(', ')}
+          {selectedIssues.map((i) => `#${i.number}`).join(', ')}
         </p>
       )}
     </div>

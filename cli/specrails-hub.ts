@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 /**
- * srm — specrails CLI bridge
+ * specrails-hub — specrails CLI bridge
  *
  * Routes commands to the manager when running, or falls back to invoking
  * claude directly when the manager is not reachable.
  *
  * Usage:
- *   srm implement #42           → /sr:implement #42 (via manager or direct)
- *   srm "any raw prompt"        → raw prompt (no /sr: prefix)
- *   srm --status                → print manager state
- *   srm --jobs                  → print job history table
- *   srm --port 5000 <command>   → use port 5000 instead of 4200
- *   srm --help                  → print usage and exit 0
+ *   specrails-hub implement #42           → /sr:implement #42 (via manager or direct)
+ *   specrails-hub "any raw prompt"        → raw prompt (no /sr: prefix)
+ *   specrails-hub --status                → print manager state
+ *   specrails-hub --jobs                  → print job history table
+ *   specrails-hub --port 5000 <command>   → use port 5000 instead of 4200
+ *   specrails-hub --help                  → print usage and exit 0
  */
 
 import http from 'http'
@@ -59,20 +59,20 @@ const red = (t: string) => ansi('31', t)
 const bold = (t: string) => ansi('1', t)
 const dimCyan = (t: string) => ansi('2;36', t)
 
-function srmPrefix(): string {
-  return dim('[srm]')
+function cliPrefix(): string {
+  return dim('[specrails-hub]')
 }
 
-function srmLog(msg: string): void {
-  process.stdout.write(`${srmPrefix()} ${msg}\n`)
+function cliLog(msg: string): void {
+  process.stdout.write(`${cliPrefix()} ${msg}\n`)
 }
 
-function srmError(msg: string): void {
-  process.stderr.write(`${srmPrefix()} ${red(`error: ${msg}`)}\n`)
+function cliError(msg: string): void {
+  process.stderr.write(`${cliPrefix()} ${red(`error: ${msg}`)}\n`)
 }
 
-function srmWarn(msg: string): void {
-  process.stderr.write(`${srmPrefix()} ${dim(`warning: ${msg}`)}\n`)
+function cliWarn(msg: string): void {
+  process.stderr.write(`${cliPrefix()} ${dim(`warning: ${msg}`)}\n`)
 }
 
 // ---------------------------------------------------------------------------
@@ -141,17 +141,17 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
 function printHelp(): void {
   process.stdout.write(`
-${bold('srm')} — specrails CLI bridge
+${bold('specrails-hub')} — specrails CLI bridge
 
 ${bold('Usage:')}
-  srm implement #42                Run a known specrails verb (prepends /sr:)
-  srm batch-implement #40 #41      Known verbs: ${[...KNOWN_VERBS].join(', ')}
-  srm "any raw prompt"             Pass a raw prompt directly to claude
-  srm --status                     Print manager status and exit
-  srm --jobs                       Print recent job history and exit
-  srm hub <subcommand>             Manage the hub (multi-project mode)
-  srm --port <n>                   Override default port (${DEFAULT_PORT})
-  srm --help                       Show this help text
+  specrails-hub implement #42                Run a known specrails verb (prepends /sr:)
+  specrails-hub batch-implement #40 #41      Known verbs: ${[...KNOWN_VERBS].join(', ')}
+  specrails-hub "any raw prompt"             Pass a raw prompt directly to claude
+  specrails-hub --status                     Print manager status and exit
+  specrails-hub --jobs                       Print recent job history and exit
+  specrails-hub hub <subcommand>             Manage the hub (multi-project mode)
+  specrails-hub --port <n>                   Override default port (${DEFAULT_PORT})
+  specrails-hub --help                       Show this help text
 
 ${bold('Execution paths:')}
   Manager running → POST /api/spawn + stream logs via WebSocket
@@ -275,7 +275,7 @@ export interface SummaryData {
 }
 
 export function printSummary(data: SummaryData): void {
-  const doneLabel = isTTY ? bold('[srm] done') : '[srm] done'
+  const doneLabel = isTTY ? bold('[specrails-hub] done') : '[specrails-hub] done'
   const durationPart = `duration: ${formatDuration(data.durationMs)}`
   const costPart = data.costUsd != null ? `  cost: $${data.costUsd.toFixed(2)}` : ''
   const tokenPart = data.totalTokens != null ? `  tokens: ${formatTokens(data.totalTokens)}` : ''
@@ -343,15 +343,15 @@ async function runViaWebManager(command: string, baseUrl: string): Promise<numbe
       // Hub mode: resolve project from CWD
       const project = await resolveProjectFromCwd(baseUrl)
       if (!project) {
-        srmError(
+        cliError(
           'hub is running but no project registered for the current directory.\n' +
-          `  Run: srm hub add ${process.cwd()}`
+          `  Run: specrails-hub hub add ${process.cwd()}`
         )
         return 1
       }
       spawnUrl = `${baseUrl}/api/projects/${project.id}/spawn`
       jobApiBase = `${baseUrl}/api/projects/${project.id}`
-      srmLog(`project: ${project.name}`)
+      cliLog(`project: ${project.name}`)
     }
   } catch {
     // Single-project mode — use default paths
@@ -362,12 +362,12 @@ async function runViaWebManager(command: string, baseUrl: string): Promise<numbe
   try {
     spawnRes = await httpPost(spawnUrl, { command })
   } catch (err) {
-    srmError('failed to connect to manager')
+    cliError('failed to connect to manager')
     return 1
   }
 
   if (spawnRes.status === 409) {
-    srmError('manager is busy (another job is running)')
+    cliError('manager is busy (another job is running)')
     return 1
   }
 
@@ -377,7 +377,7 @@ async function runViaWebManager(command: string, baseUrl: string): Promise<numbe
       const parsed = JSON.parse(spawnRes.body) as { error?: string }
       if (parsed.error) errMsg = parsed.error
     } catch { /* use default */ }
-    srmError(errMsg)
+    cliError(errMsg)
     return 1
   }
 
@@ -388,7 +388,7 @@ async function runViaWebManager(command: string, baseUrl: string): Promise<numbe
     processId = (parsed.jobId ?? parsed.processId) ?? ''
     if (!processId) throw new Error('missing jobId')
   } catch {
-    srmError('invalid response from /api/spawn')
+    cliError('invalid response from /api/spawn')
     return 1
   }
 
@@ -458,7 +458,7 @@ async function runViaWebManager(command: string, baseUrl: string): Promise<numbe
 
     ws.on('close', () => {
       if (!resolved) {
-        srmWarn('lost connection to manager')
+        cliWarn('lost connection to manager')
         resolved = true
         resolve()
       }
@@ -466,7 +466,7 @@ async function runViaWebManager(command: string, baseUrl: string): Promise<numbe
 
     ws.on('error', (err) => {
       if (!resolved) {
-        srmWarn(`WebSocket error: ${err.message}`)
+        cliWarn(`WebSocket error: ${err.message}`)
         resolved = true
         resolve()
       }
@@ -540,9 +540,9 @@ async function runDirect(command: string): Promise<number> {
   } catch (err: unknown) {
     const code = (err as NodeJS.ErrnoException).code
     if (code === 'ENOENT') {
-      srmError('claude binary not found')
+      cliError('claude binary not found')
     } else {
-      srmError(`failed to spawn claude: ${(err as Error).message}`)
+      cliError(`failed to spawn claude: ${(err as Error).message}`)
     }
     return 1
   }
@@ -583,9 +583,9 @@ async function runDirect(command: string): Promise<number> {
 
     child.on('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'ENOENT') {
-        srmError('claude binary not found')
+        cliError('claude binary not found')
       } else {
-        srmError(`claude process error: ${err.message}`)
+        cliError(`claude process error: ${err.message}`)
       }
       resolve(1)
     })
@@ -697,7 +697,7 @@ async function handleJobs(port: number): Promise<number> {
   const detection = await detectWebManager(port)
 
   if (!detection.running) {
-    srmError(`manager is not running (${baseUrl})`)
+    cliError(`manager is not running (${baseUrl})`)
     return 1
   }
 
@@ -705,17 +705,17 @@ async function handleJobs(port: number): Promise<number> {
   try {
     res = await httpGet(`${baseUrl}/api/jobs`)
   } catch {
-    srmError('failed to fetch job list')
+    cliError('failed to fetch job list')
     return 1
   }
 
   if (res.status === 501 || res.status === 404) {
-    srmLog('jobs history requires manager with SQLite persistence (#57)')
+    cliLog('jobs history requires manager with SQLite persistence (#57)')
     return 1
   }
 
   if (res.status !== 200) {
-    srmError(`unexpected response from /api/jobs: HTTP ${res.status}`)
+    cliError(`unexpected response from /api/jobs: HTTP ${res.status}`)
     return 1
   }
 
@@ -723,12 +723,12 @@ async function handleJobs(port: number): Promise<number> {
   try {
     data = JSON.parse(res.body) as JobsResponse
   } catch {
-    srmError('invalid response from /api/jobs')
+    cliError('invalid response from /api/jobs')
     return 1
   }
 
   if (!data.jobs || data.jobs.length === 0) {
-    srmLog('no jobs recorded yet')
+    cliLog('no jobs recorded yet')
     return 0
   }
 
@@ -787,11 +787,11 @@ function isProcessRunning(pid: number): boolean {
 }
 
 function hubServerPath(): string {
-  // srm lives at cli/dist/srm.js; server is at ../server/index.js (built)
+  // CLI lives at cli/dist/specrails-hub.js; server is at server/dist/index.js (built)
   // In dev mode with tsx, we resolve from __filename
   const base = path.resolve(__dirname, '..')
   // Try compiled JS first, then fall back to tsx dev path
-  const compiled = path.join(base, 'server', 'index.js')
+  const compiled = path.join(base, 'server', 'dist', 'index.js')
   const devTs = path.join(base, 'server', 'index.ts')
   if (fs.existsSync(compiled)) return compiled
   if (fs.existsSync(devTs)) return devTs
@@ -801,7 +801,7 @@ function hubServerPath(): string {
 async function hubStart(port: number): Promise<number> {
   const pid = readPid()
   if (pid !== null && isProcessRunning(pid)) {
-    srmLog(`hub already running (pid ${pid}) on port ${port}`)
+    cliLog(`hub already running (pid ${pid}) on port ${port}`)
     return 0
   }
 
@@ -822,30 +822,30 @@ async function hubStart(port: number): Promise<number> {
   await new Promise<void>((resolve) => setTimeout(resolve, 800))
   const detection = await detectWebManager(port)
   if (detection.running) {
-    srmLog(`hub started on http://127.0.0.1:${port}`)
+    cliLog(`hub started on http://127.0.0.1:${port}`)
     return 0
   }
-  srmError('hub failed to start (check logs)')
+  cliError('hub failed to start (check logs)')
   return 1
 }
 
 async function hubStop(): Promise<number> {
   const pid = readPid()
   if (pid === null) {
-    srmLog('hub is not running (no pid file)')
+    cliLog('hub is not running (no pid file)')
     return 0
   }
   if (!isProcessRunning(pid)) {
-    srmLog('hub is not running (stale pid file)')
+    cliLog('hub is not running (stale pid file)')
     try { fs.unlinkSync(HUB_PID_FILE) } catch { /* ignore */ }
     return 0
   }
   try {
     process.kill(pid, 'SIGTERM')
-    srmLog(`hub stopped (pid ${pid})`)
+    cliLog(`hub stopped (pid ${pid})`)
     return 0
   } catch (err) {
-    srmError(`failed to stop hub: ${(err as Error).message}`)
+    cliError(`failed to stop hub: ${(err as Error).message}`)
     return 1
   }
 }
@@ -879,7 +879,7 @@ async function hubStatus(port: number): Promise<number> {
 async function hubAdd(projectPath: string, port: number): Promise<number> {
   const detection = await detectWebManager(port)
   if (!detection.running) {
-    srmError('hub is not running. Start it first with: srm hub start')
+    cliError('hub is not running. Start it first with: specrails-hub hub start')
     return 1
   }
   try {
@@ -888,19 +888,19 @@ async function hubAdd(projectPath: string, port: number): Promise<number> {
     })
     if (res.status === 201) {
       const data = JSON.parse(res.body) as { project?: { name: string; id: string } }
-      srmLog(`added project: ${data.project?.name ?? projectPath}`)
+      cliLog(`added project: ${data.project?.name ?? projectPath}`)
       return 0
     } else if (res.status === 409) {
-      srmLog('project already registered')
+      cliLog('project already registered')
       return 0
     } else {
       let errMsg = `HTTP ${res.status}`
       try { errMsg = (JSON.parse(res.body) as { error?: string }).error ?? errMsg } catch { /* use default */ }
-      srmError(`failed to add project: ${errMsg}`)
+      cliError(`failed to add project: ${errMsg}`)
       return 1
     }
   } catch (err) {
-    srmError(`failed to connect to hub: ${(err as Error).message}`)
+    cliError(`failed to connect to hub: ${(err as Error).message}`)
     return 1
   }
 }
@@ -908,7 +908,7 @@ async function hubAdd(projectPath: string, port: number): Promise<number> {
 async function hubRemove(projectId: string, port: number): Promise<number> {
   const detection = await detectWebManager(port)
   if (!detection.running) {
-    srmError('hub is not running')
+    cliError('hub is not running')
     return 1
   }
   try {
@@ -929,14 +929,14 @@ async function hubRemove(projectId: string, port: number): Promise<number> {
       req.end()
     })
     if (deleteRes.status === 200) {
-      srmLog(`project removed`)
+      cliLog(`project removed`)
       return 0
     } else {
-      srmError(`failed to remove project: HTTP ${deleteRes.status}`)
+      cliError(`failed to remove project: HTTP ${deleteRes.status}`)
       return 1
     }
   } catch (err) {
-    srmError(`failed to connect to hub: ${(err as Error).message}`)
+    cliError(`failed to connect to hub: ${(err as Error).message}`)
     return 1
   }
 }
@@ -944,14 +944,14 @@ async function hubRemove(projectId: string, port: number): Promise<number> {
 async function hubList(port: number): Promise<number> {
   const detection = await detectWebManager(port)
   if (!detection.running) {
-    srmError('hub is not running')
+    cliError('hub is not running')
     return 1
   }
   try {
     const res = await httpGet(`${detection.baseUrl}/api/hub/projects`)
     const data = JSON.parse(res.body) as { projects: Array<{ id: string; name: string; path: string }> }
     if (!data.projects || data.projects.length === 0) {
-      srmLog('no projects registered')
+      cliLog('no projects registered')
       return 0
     }
     const idW = 36
@@ -962,7 +962,7 @@ async function hubList(port: number): Promise<number> {
     }
     return 0
   } catch (err) {
-    srmError(`failed to fetch projects: ${(err as Error).message}`)
+    cliError(`failed to fetch projects: ${(err as Error).message}`)
     return 1
   }
 }
@@ -972,15 +972,15 @@ async function handleHub(subArgs: string[], port: number): Promise<number> {
 
   if (!sub || sub === 'help' || sub === '--help' || sub === '-h') {
     process.stdout.write(`
-${bold('srm hub')} — manage the specrails hub (multi-project mode)
+${bold('specrails-hub hub')} — manage the specrails hub (multi-project mode)
 
 ${bold('Usage:')}
-  srm hub start              Start the hub server
-  srm hub stop               Stop the hub server
-  srm hub status             Show hub status and registered projects
-  srm hub add <path>         Register a project by path
-  srm hub remove <id>        Unregister a project by ID
-  srm hub list               List all registered projects
+  specrails-hub hub start              Start the hub server
+  specrails-hub hub stop               Stop the hub server
+  specrails-hub hub status             Show hub status and registered projects
+  specrails-hub hub add <path>         Register a project by path
+  specrails-hub hub remove <id>        Unregister a project by ID
+  specrails-hub hub list               List all registered projects
 `.trimStart())
     return 0
   }
@@ -997,7 +997,7 @@ ${bold('Usage:')}
   if (sub === 'add') {
     const projectPath = subArgs[1]
     if (!projectPath) {
-      srmError('usage: srm hub add <path>')
+      cliError('usage: specrails-hub hub add <path>')
       return 1
     }
     return hubAdd(projectPath, port)
@@ -1005,7 +1005,7 @@ ${bold('Usage:')}
   if (sub === 'remove') {
     const projectId = subArgs[1]
     if (!projectId) {
-      srmError('usage: srm hub remove <id>')
+      cliError('usage: specrails-hub hub remove <id>')
       return 1
     }
     return hubRemove(projectId, port)
@@ -1014,7 +1014,7 @@ ${bold('Usage:')}
     return hubList(port)
   }
 
-  srmError(`unknown hub subcommand: ${sub}`)
+  cliError(`unknown hub subcommand: ${sub}`)
   return 1
 }
 
@@ -1050,17 +1050,17 @@ async function main(): Promise<void> {
   const command = parsed.resolved
   const port = parsed.port
 
-  srmLog(`running: ${command}`)
+  cliLog(`running: ${command}`)
 
   const detection = await detectWebManager(port)
 
   let exitCode: number
 
   if (detection.running) {
-    srmLog(`routing via manager at ${detection.baseUrl}`)
+    cliLog(`routing via manager at ${detection.baseUrl}`)
     exitCode = await runViaWebManager(command, detection.baseUrl)
   } else {
-    srmLog('manager not running — invoking claude directly')
+    cliLog('manager not running — invoking claude directly')
     exitCode = await runDirect(command)
   }
 
@@ -1070,7 +1070,7 @@ async function main(): Promise<void> {
 // Only run main() when this file is executed directly (not when imported in tests)
 if (require.main === module) {
   main().catch((err: unknown) => {
-    srmError((err as Error).message ?? String(err))
+    cliError((err as Error).message ?? String(err))
     process.exit(1)
   })
 }
