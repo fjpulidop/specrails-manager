@@ -3,7 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import type { WsMessage } from './types'
 import type { ProjectRegistry } from './project-registry'
-import { getHubSetting, setHubSetting, listProjects } from './hub-db'
+import { getHubSetting, setHubSetting, listProjects, listAgents, getAgent, addAgent, updateAgent } from './hub-db'
 import { createSpecrailsTechClient } from './specrails-tech-client'
 import { checkCoreCompat } from './core-compat'
 import { getHubAnalytics, getHubTodayStats } from './hub-analytics'
@@ -154,6 +154,68 @@ export function createHubRouter(
       setHubSetting(registry.hubDb, 'specrails_tech_url', specrailsTechUrl.trim())
     }
     res.json({ ok: true })
+  })
+
+  // ─── Agent routes ────────────────────────────────────────────────────────────
+
+  // GET /api/hub/agents — list all registered agents
+  router.get('/agents', (_req, res) => {
+    res.json({ agents: listAgents(registry.hubDb) })
+  })
+
+  // GET /api/hub/agents/:id — get agent by ID
+  router.get('/agents/:id', (req, res) => {
+    const agent = getAgent(registry.hubDb, req.params.id)
+    if (!agent) {
+      res.status(404).json({ error: 'Agent not found' })
+      return
+    }
+    res.json({ agent })
+  })
+
+  // POST /api/hub/agents — register a new agent
+  router.post('/agents', (req, res) => {
+    const { slug, name, role, config } = req.body ?? {}
+    if (!slug || typeof slug !== 'string') {
+      res.status(400).json({ error: 'slug is required' })
+      return
+    }
+    if (!name || typeof name !== 'string') {
+      res.status(400).json({ error: 'name is required' })
+      return
+    }
+    const id = crypto.randomUUID()
+    try {
+      const agent = addAgent(registry.hubDb, { id, slug, name, role, config })
+      res.status(201).json({ agent })
+    } catch (err) {
+      const message = (err as Error).message ?? ''
+      if (message.includes('UNIQUE')) {
+        res.status(409).json({ error: 'An agent with this slug already exists' })
+      } else {
+        console.error('[hub] add agent error:', err)
+        res.status(500).json({ error: 'Failed to register agent' })
+      }
+    }
+  })
+
+  // PATCH /api/hub/agents/:id — update agent fields
+  router.patch('/agents/:id', (req, res) => {
+    const agent = getAgent(registry.hubDb, req.params.id)
+    if (!agent) {
+      res.status(404).json({ error: 'Agent not found' })
+      return
+    }
+    const { name, role, status, current_job_id, last_heartbeat_at, config } = req.body ?? {}
+    const updates: Parameters<typeof updateAgent>[2] = {}
+    if (name !== undefined) updates.name = name
+    if (role !== undefined) updates.role = role
+    if (status !== undefined) updates.status = status
+    if (current_job_id !== undefined) updates.current_job_id = current_job_id
+    if (last_heartbeat_at !== undefined) updates.last_heartbeat_at = last_heartbeat_at
+    if (config !== undefined) updates.config = config
+    const updated = updateAgent(registry.hubDb, req.params.id, updates)
+    res.json({ agent: updated })
   })
 
   // GET /api/hub/core-compat — compatibility status between hub and specrails-core

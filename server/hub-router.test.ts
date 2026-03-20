@@ -5,7 +5,7 @@ import path from 'path'
 import fs from 'fs'
 
 import { createHubRouter } from './hub-router'
-import { initHubDb, addProject, removeProject as removeProjectFromHub, getHubSetting, setHubSetting } from './hub-db'
+import { initHubDb, addProject, removeProject as removeProjectFromHub, getHubSetting, setHubSetting, addAgent, getAgent } from './hub-db'
 import type { ProjectRegistry, ProjectContext } from './project-registry'
 import type { WsMessage } from './types'
 import type { DbInstance } from './db'
@@ -220,6 +220,128 @@ describe('hub-router', () => {
       expect(res.status).toBe(200)
       expect(res.body.project).toBeDefined()
       expect(registry.touchProject).toHaveBeenCalled()
+    })
+  })
+
+  // ─── GET /agents ────────────────────────────────────────────────────────────
+
+  describe('GET /api/hub/agents', () => {
+    it('returns empty agents list', async () => {
+      const { app } = createApp()
+      const res = await request(app).get('/api/hub/agents')
+      expect(res.status).toBe(200)
+      expect(res.body.agents).toEqual([])
+    })
+
+    it('returns registered agents', async () => {
+      addAgent(hubDb, { id: 'a1', slug: 'my-agent', name: 'My Agent' })
+      const { app } = createApp()
+      const res = await request(app).get('/api/hub/agents')
+      expect(res.status).toBe(200)
+      expect(res.body.agents).toHaveLength(1)
+      expect(res.body.agents[0].slug).toBe('my-agent')
+    })
+  })
+
+  // ─── GET /agents/:id ────────────────────────────────────────────────────────
+
+  describe('GET /api/hub/agents/:id', () => {
+    it('returns 404 for non-existent agent', async () => {
+      const { app } = createApp()
+      const res = await request(app).get('/api/hub/agents/nonexistent')
+      expect(res.status).toBe(404)
+    })
+
+    it('returns agent by ID', async () => {
+      addAgent(hubDb, { id: 'a1', slug: 'my-agent', name: 'My Agent' })
+      const { app } = createApp()
+      const res = await request(app).get('/api/hub/agents/a1')
+      expect(res.status).toBe(200)
+      expect(res.body.agent.id).toBe('a1')
+      expect(res.body.agent.status).toBe('idle')
+    })
+  })
+
+  // ─── POST /agents ────────────────────────────────────────────────────────────
+
+  describe('POST /api/hub/agents', () => {
+    it('returns 400 when slug is missing', async () => {
+      const { app } = createApp()
+      const res = await request(app).post('/api/hub/agents').send({ name: 'Foo' })
+      expect(res.status).toBe(400)
+      expect(res.body.error).toContain('slug is required')
+    })
+
+    it('returns 400 when name is missing', async () => {
+      const { app } = createApp()
+      const res = await request(app).post('/api/hub/agents').send({ slug: 'foo' })
+      expect(res.status).toBe(400)
+      expect(res.body.error).toContain('name is required')
+    })
+
+    it('creates agent with required fields', async () => {
+      const { app } = createApp()
+      const res = await request(app).post('/api/hub/agents').send({ slug: 'my-agent', name: 'My Agent' })
+      expect(res.status).toBe(201)
+      expect(res.body.agent.slug).toBe('my-agent')
+      expect(res.body.agent.name).toBe('My Agent')
+      expect(res.body.agent.status).toBe('idle')
+    })
+
+    it('creates agent with optional role and config', async () => {
+      const { app } = createApp()
+      const res = await request(app).post('/api/hub/agents').send({
+        slug: 'dev-agent',
+        name: 'Dev Agent',
+        role: 'developer',
+        config: '{"key":"val"}',
+      })
+      expect(res.status).toBe(201)
+      expect(res.body.agent.role).toBe('developer')
+    })
+
+    it('returns 409 when slug is already registered', async () => {
+      addAgent(hubDb, { id: 'a1', slug: 'my-agent', name: 'My Agent' })
+      const { app } = createApp()
+      const res = await request(app).post('/api/hub/agents').send({ slug: 'my-agent', name: 'Other' })
+      expect(res.status).toBe(409)
+    })
+  })
+
+  // ─── PATCH /agents/:id ──────────────────────────────────────────────────────
+
+  describe('PATCH /api/hub/agents/:id', () => {
+    it('returns 404 for non-existent agent', async () => {
+      const { app } = createApp()
+      const res = await request(app).patch('/api/hub/agents/missing').send({ status: 'busy' })
+      expect(res.status).toBe(404)
+    })
+
+    it('updates agent status and current_job_id', async () => {
+      addAgent(hubDb, { id: 'a1', slug: 'my-agent', name: 'My Agent' })
+      const { app } = createApp()
+      const res = await request(app)
+        .patch('/api/hub/agents/a1')
+        .send({ status: 'busy', current_job_id: 'job-xyz' })
+      expect(res.status).toBe(200)
+      expect(res.body.agent.status).toBe('busy')
+      expect(res.body.agent.current_job_id).toBe('job-xyz')
+    })
+
+    it('persists updates to the DB', async () => {
+      addAgent(hubDb, { id: 'a1', slug: 'my-agent', name: 'My Agent' })
+      const { app } = createApp()
+      await request(app).patch('/api/hub/agents/a1').send({ name: 'Renamed' })
+      const row = getAgent(hubDb, 'a1')
+      expect(row?.name).toBe('Renamed')
+    })
+
+    it('returns updated agent with no body changes', async () => {
+      addAgent(hubDb, { id: 'a1', slug: 'my-agent', name: 'My Agent' })
+      const { app } = createApp()
+      const res = await request(app).patch('/api/hub/agents/a1').send({})
+      expect(res.status).toBe(200)
+      expect(res.body.agent.id).toBe('a1')
     })
   })
 
