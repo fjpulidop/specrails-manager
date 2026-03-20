@@ -10,6 +10,16 @@ import {
   touchProject,
   getHubSetting,
   setHubSetting,
+  setProjectSetupSession,
+  getProjectSetupSession,
+  clearProjectSetupSession,
+  listAgents,
+  getAgent,
+  getAgentBySlug,
+  addAgent,
+  updateAgent,
+  findAgentByCurrentJobId,
+  clearAgentJob,
 } from './hub-db'
 import type { DbInstance } from './db'
 
@@ -36,12 +46,13 @@ describe('hub-db', () => {
   // ─── Schema & Init ──────────────────────────────────────────────────────────
 
   describe('initHubDb', () => {
-    it('creates the projects and hub_settings tables', () => {
+    it('creates the projects, hub_settings and agents tables', () => {
       const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[]
       const names = tables.map((t) => t.name)
       expect(names).toContain('projects')
       expect(names).toContain('hub_settings')
       expect(names).toContain('schema_migrations')
+      expect(names).toContain('agents')
     })
 
     it('creates indexes on slug and path', () => {
@@ -51,17 +62,18 @@ describe('hub-db', () => {
       expect(names).toContain('idx_projects_path')
     })
 
-    it('applies migration 1 and records it', () => {
-      const versions = db.prepare('SELECT version FROM schema_migrations').all() as { version: number }[]
-      expect(versions).toHaveLength(1)
+    it('applies migrations 1 and 2 and records them', () => {
+      const versions = db.prepare('SELECT version FROM schema_migrations ORDER BY version').all() as { version: number }[]
+      expect(versions).toHaveLength(2)
       expect(versions[0].version).toBe(1)
+      expect(versions[1].version).toBe(2)
     })
 
     it('is idempotent — calling initHubDb again does not fail', () => {
       // Re-init on same DB (in-memory so we just call again)
       const db2 = makeDb()
       const versions = db2.prepare('SELECT version FROM schema_migrations').all() as { version: number }[]
-      expect(versions).toHaveLength(1)
+      expect(versions).toHaveLength(2)
     })
   })
 
@@ -192,6 +204,173 @@ describe('hub-db', () => {
       setHubSetting(db, 'key2', 'value2')
       expect(getHubSetting(db, 'key1')).toBe('value1')
       expect(getHubSetting(db, 'key2')).toBe('value2')
+    })
+  })
+
+  describe('setup session persistence', () => {
+    it('saves and retrieves a setup session ID', () => {
+      setProjectSetupSession(db, 'proj-1', 'session-abc-123')
+      expect(getProjectSetupSession(db, 'proj-1')).toBe('session-abc-123')
+    })
+
+    it('returns undefined when no session is stored', () => {
+      expect(getProjectSetupSession(db, 'proj-1')).toBeUndefined()
+    })
+
+    it('overwrites an existing session ID', () => {
+      setProjectSetupSession(db, 'proj-1', 'session-old')
+      setProjectSetupSession(db, 'proj-1', 'session-new')
+      expect(getProjectSetupSession(db, 'proj-1')).toBe('session-new')
+    })
+
+    it('clears a session ID', () => {
+      setProjectSetupSession(db, 'proj-1', 'session-abc-123')
+      clearProjectSetupSession(db, 'proj-1')
+      expect(getProjectSetupSession(db, 'proj-1')).toBeUndefined()
+    })
+
+    it('isolates sessions per project', () => {
+      setProjectSetupSession(db, 'proj-1', 'session-one')
+      setProjectSetupSession(db, 'proj-2', 'session-two')
+      expect(getProjectSetupSession(db, 'proj-1')).toBe('session-one')
+      expect(getProjectSetupSession(db, 'proj-2')).toBe('session-two')
+      clearProjectSetupSession(db, 'proj-1')
+      expect(getProjectSetupSession(db, 'proj-1')).toBeUndefined()
+      expect(getProjectSetupSession(db, 'proj-2')).toBe('session-two')
+    })
+  })
+
+  // ─── Agent CRUD ──────────────────────────────────────────────────────────────
+
+  function makeAgentOpts(suffix = '1') {
+    return {
+      id: `agent-${suffix}`,
+      slug: `my-agent-${suffix}`,
+      name: `My Agent ${suffix}`,
+    }
+  }
+
+  describe('addAgent', () => {
+    it('adds an agent and returns the full row', () => {
+      const row = addAgent(db, makeAgentOpts())
+      expect(row.id).toBe('agent-1')
+      expect(row.slug).toBe('my-agent-1')
+      expect(row.name).toBe('My Agent 1')
+      expect(row.status).toBe('idle')
+      expect(row.current_job_id).toBeNull()
+      expect(row.role).toBeNull()
+      expect(row.created_at).toBeTruthy()
+    })
+
+    it('stores role and config when provided', () => {
+      const row = addAgent(db, { ...makeAgentOpts(), role: 'developer', config: '{"key":"val"}' })
+      expect(row.role).toBe('developer')
+      expect(row.config).toBe('{"key":"val"}')
+    })
+
+    it('throws on duplicate slug', () => {
+      addAgent(db, makeAgentOpts())
+      expect(() => addAgent(db, { id: 'agent-dup', slug: 'my-agent-1', name: 'Other' })).toThrow(/UNIQUE/)
+    })
+  })
+
+  describe('listAgents', () => {
+    it('returns empty array when no agents', () => {
+      expect(listAgents(db)).toEqual([])
+    })
+
+    it('returns agents ordered by created_at ASC', () => {
+      addAgent(db, makeAgentOpts('a'))
+      addAgent(db, makeAgentOpts('b'))
+      const agents = listAgents(db)
+      expect(agents).toHaveLength(2)
+      expect(agents[0].slug).toBe('my-agent-a')
+      expect(agents[1].slug).toBe('my-agent-b')
+    })
+  })
+
+  describe('getAgent', () => {
+    it('returns agent by ID', () => {
+      addAgent(db, makeAgentOpts())
+      expect(getAgent(db, 'agent-1')?.slug).toBe('my-agent-1')
+    })
+
+    it('returns undefined for non-existent ID', () => {
+      expect(getAgent(db, 'nope')).toBeUndefined()
+    })
+  })
+
+  describe('getAgentBySlug', () => {
+    it('returns agent by slug', () => {
+      addAgent(db, makeAgentOpts())
+      expect(getAgentBySlug(db, 'my-agent-1')?.id).toBe('agent-1')
+    })
+
+    it('returns undefined for non-existent slug', () => {
+      expect(getAgentBySlug(db, 'nope')).toBeUndefined()
+    })
+  })
+
+  describe('updateAgent', () => {
+    it('updates status and current_job_id', () => {
+      addAgent(db, makeAgentOpts())
+      const updated = updateAgent(db, 'agent-1', { status: 'busy', current_job_id: 'job-xyz' })
+      expect(updated?.status).toBe('busy')
+      expect(updated?.current_job_id).toBe('job-xyz')
+    })
+
+    it('returns undefined for non-existent agent', () => {
+      expect(updateAgent(db, 'missing', { status: 'busy' })).toBeUndefined()
+    })
+
+    it('returns the current row when no updates given', () => {
+      addAgent(db, makeAgentOpts())
+      const result = updateAgent(db, 'agent-1', {})
+      expect(result?.id).toBe('agent-1')
+    })
+
+    it('only updates provided fields', () => {
+      addAgent(db, { ...makeAgentOpts(), role: 'developer' })
+      updateAgent(db, 'agent-1', { status: 'busy' })
+      const row = getAgent(db, 'agent-1')
+      expect(row?.role).toBe('developer')
+      expect(row?.status).toBe('busy')
+    })
+  })
+
+  describe('findAgentByCurrentJobId', () => {
+    it('finds an agent by current_job_id', () => {
+      addAgent(db, makeAgentOpts())
+      updateAgent(db, 'agent-1', { current_job_id: 'job-abc' })
+      const found = findAgentByCurrentJobId(db, 'job-abc')
+      expect(found?.id).toBe('agent-1')
+    })
+
+    it('returns undefined when no agent has that job', () => {
+      expect(findAgentByCurrentJobId(db, 'job-missing')).toBeUndefined()
+    })
+  })
+
+  describe('clearAgentJob', () => {
+    it('resets agent to idle and clears current_job_id', () => {
+      addAgent(db, makeAgentOpts())
+      updateAgent(db, 'agent-1', { status: 'busy', current_job_id: 'job-abc' })
+      clearAgentJob(db, 'job-abc')
+      const row = getAgent(db, 'agent-1')
+      expect(row?.status).toBe('idle')
+      expect(row?.current_job_id).toBeNull()
+    })
+
+    it('does nothing when no agent has that job', () => {
+      addAgent(db, makeAgentOpts())
+      expect(() => clearAgentJob(db, 'no-such-job')).not.toThrow()
+    })
+
+    it('does not change agents already idle', () => {
+      addAgent(db, makeAgentOpts())
+      // Agent is idle (default), clearing a non-matching job has no effect
+      clearAgentJob(db, 'some-job')
+      expect(getAgent(db, 'agent-1')?.status).toBe('idle')
     })
   })
 })

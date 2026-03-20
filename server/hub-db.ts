@@ -16,6 +16,20 @@ export interface ProjectRow {
   last_seen_at: string
 }
 
+export type AgentStatus = 'idle' | 'busy' | 'offline'
+
+export interface AgentRow {
+  id: string
+  slug: string
+  name: string
+  role: string | null
+  status: AgentStatus
+  current_job_id: string | null
+  last_heartbeat_at: string | null
+  config: string | null
+  created_at: string
+}
+
 // ─── Hub DB path ──────────────────────────────────────────────────────────────
 
 export function getHubDbPath(): string {
@@ -62,6 +76,25 @@ function applyHubMigrations(db: DbInstance): void {
           key   TEXT PRIMARY KEY,
           value TEXT NOT NULL
         );
+      `)
+    },
+    // Migration 2: agents table
+    () => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS agents (
+          id                 TEXT PRIMARY KEY,
+          slug               TEXT NOT NULL UNIQUE,
+          name               TEXT NOT NULL,
+          role               TEXT,
+          status             TEXT NOT NULL DEFAULT 'idle',
+          current_job_id     TEXT,
+          last_heartbeat_at  TEXT,
+          config             TEXT,
+          created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_agents_slug ON agents(slug);
+        CREATE INDEX IF NOT EXISTS idx_agents_current_job_id ON agents(current_job_id);
       `)
     },
   ]
@@ -138,4 +171,67 @@ export function setHubSetting(db: DbInstance, key: string, value: string): void 
   db.prepare(
     'INSERT OR REPLACE INTO hub_settings (key, value) VALUES (?, ?)'
   ).run(key, value)
+}
+
+// ─── Setup session persistence ────────────────────────────────────────────────
+
+export function setProjectSetupSession(db: DbInstance, projectId: string, sessionId: string): void {
+  setHubSetting(db, `setup_session:${projectId}`, sessionId)
+}
+
+export function getProjectSetupSession(db: DbInstance, projectId: string): string | undefined {
+  return getHubSetting(db, `setup_session:${projectId}`)
+}
+
+export function clearProjectSetupSession(db: DbInstance, projectId: string): void {
+  db.prepare('DELETE FROM hub_settings WHERE key = ?').run(`setup_session:${projectId}`)
+}
+
+// ─── Agent CRUD ───────────────────────────────────────────────────────────────
+
+export function listAgents(db: DbInstance): AgentRow[] {
+  return db.prepare('SELECT * FROM agents ORDER BY created_at ASC').all() as AgentRow[]
+}
+
+export function getAgent(db: DbInstance, id: string): AgentRow | undefined {
+  return db.prepare('SELECT * FROM agents WHERE id = ?').get(id) as AgentRow | undefined
+}
+
+export function getAgentBySlug(db: DbInstance, slug: string): AgentRow | undefined {
+  return db.prepare('SELECT * FROM agents WHERE slug = ?').get(slug) as AgentRow | undefined
+}
+
+export function addAgent(
+  db: DbInstance,
+  agent: { id: string; slug: string; name: string; role?: string; config?: string }
+): AgentRow {
+  db.prepare(`
+    INSERT INTO agents (id, slug, name, role, config)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(agent.id, agent.slug, agent.name, agent.role ?? null, agent.config ?? null)
+  return db.prepare('SELECT * FROM agents WHERE id = ?').get(agent.id) as AgentRow
+}
+
+export function updateAgent(
+  db: DbInstance,
+  id: string,
+  updates: Partial<Pick<AgentRow, 'name' | 'role' | 'status' | 'current_job_id' | 'last_heartbeat_at' | 'config'>>
+): AgentRow | undefined {
+  const fields = Object.keys(updates) as (keyof typeof updates)[]
+  if (fields.length === 0) return getAgent(db, id)
+
+  const setClauses = fields.map((f) => `${f} = ?`).join(', ')
+  const values = fields.map((f) => updates[f] ?? null)
+  db.prepare(`UPDATE agents SET ${setClauses} WHERE id = ?`).run(...values, id)
+  return db.prepare('SELECT * FROM agents WHERE id = ?').get(id) as AgentRow | undefined
+}
+
+export function findAgentByCurrentJobId(db: DbInstance, jobId: string): AgentRow | undefined {
+  return db.prepare('SELECT * FROM agents WHERE current_job_id = ?').get(jobId) as AgentRow | undefined
+}
+
+export function clearAgentJob(db: DbInstance, jobId: string): void {
+  db.prepare(
+    "UPDATE agents SET status = 'idle', current_job_id = NULL WHERE current_job_id = ? AND status != 'idle'"
+  ).run(jobId)
 }

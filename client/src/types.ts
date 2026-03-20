@@ -107,6 +107,32 @@ export interface AnalyticsResponse {
   }
 }
 
+export interface HubProjectStats {
+  projectId: string
+  projectName: string
+  totalCostUsd: number
+  totalJobs: number
+  successRate: number
+  avgDurationMs: number | null
+}
+
+export interface HubAnalyticsResponse {
+  period: {
+    label: string
+    from: string | null
+    to: string | null
+  }
+  kpi: {
+    totalCostUsd: number
+    totalJobs: number
+    successRate: number
+    costToday: number
+    jobsToday: number
+  }
+  projectBreakdown: HubProjectStats[]
+  costTimeline: Array<{ date: string; costUsd: number }>
+}
+
 export interface ChatConversationSummary {
   id: string
   title: string | null

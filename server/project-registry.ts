@@ -15,6 +15,9 @@ import {
   getProject,
   getProjectByPath,
   touchProject,
+  setProjectSetupSession,
+  clearProjectSetupSession,
+  clearAgentJob,
   type ProjectRow,
 } from './hub-db'
 import { getConfig } from './config'
@@ -104,15 +107,29 @@ export class ProjectRegistry {
 
     const db = initDb(project.db_path)
 
-    // Bind broadcast with projectId so all WS messages carry context
+    // Bind broadcast with projectId so all WS messages carry context.
+    // Also wire agent status: when a queued job reaches a terminal state,
+    // clear current_job_id on any agent that was assigned to it.
+    const TERMINAL_JOB_STATUSES = new Set(['completed', 'failed', 'canceled'])
     const boundBroadcast = (msg: WsMessage): void => {
       const enriched = { ...msg, projectId: project.id }
       this._broadcast(enriched as WsMessage)
+      if (msg.type === 'queue') {
+        for (const job of msg.jobs) {
+          if (TERMINAL_JOB_STATUSES.has(job.status)) {
+            clearAgentJob(this._hubDb, job.id)
+          }
+        }
+      }
     }
 
     const queueManager = new QueueManager(boundBroadcast, db, undefined, project.path)
     const chatManager = new ChatManager(boundBroadcast, db, project.path)
-    const setupManager = new SetupManager(boundBroadcast)
+    const setupManager = new SetupManager(
+      boundBroadcast,
+      (pid, sid) => setProjectSetupSession(this._hubDb, pid, sid),
+      (pid) => clearProjectSetupSession(this._hubDb, pid)
+    )
     const proposalManager = new ProposalManager(boundBroadcast, db, project.path)
 
     // Load commands for this project

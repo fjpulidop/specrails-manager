@@ -4,6 +4,7 @@ import { existsSync, readdirSync } from 'fs'
 import { join } from 'path'
 import treeKill from 'tree-kill'
 import type { WsMessage } from './types'
+import { findCoreContract } from './core-compat'
 
 // ─── Checkpoint definitions ───────────────────────────────────────────────────
 
@@ -148,10 +149,48 @@ function computeSummary(projectPath: string): SetupSummary {
   return { agents, personas, commands }
 }
 
+// ─── Core contract validation ────────────────────────────────────────────────
+
+async function validateCoreContract(): Promise<void> {
+  const contractPath = await findCoreContract()
+  if (!contractPath) {
+    console.warn('[Hub] ⚠️  Could not find integration-contract.json from specrails-core')
+    return
+  }
+
+  let contract: { checkpoints?: string[]; commands?: string[] }
+  try {
+    const raw = require('fs').readFileSync(contractPath, 'utf-8') as string
+    contract = JSON.parse(raw) as { checkpoints?: string[]; commands?: string[] }
+  } catch {
+    console.warn('[Hub] ⚠️  Failed to parse integration-contract.json')
+    return
+  }
+
+  if (contract.checkpoints) {
+    const missingCheckpoints = contract.checkpoints.filter(
+      (c) => !CHECKPOINTS.some((cp) => cp.key === c)
+    )
+    const extraCheckpoints = CHECKPOINTS
+      .filter((cp) => !contract.checkpoints!.includes(cp.key))
+      .map((cp) => cp.key)
+
+    if (missingCheckpoints.length > 0 || extraCheckpoints.length > 0) {
+      console.warn('[Hub] ⚠️  specrails-core contract checkpoint mismatch:')
+      if (missingCheckpoints.length > 0)
+        console.warn(`  Checkpoints in Core but not in Hub: ${missingCheckpoints.join(', ')}`)
+      if (extraCheckpoints.length > 0)
+        console.warn(`  Checkpoints in Hub but not in Core: ${extraCheckpoints.join(', ')}`)
+    }
+  }
+}
+
 // ─── SetupManager ─────────────────────────────────────────────────────────────
 
 export class SetupManager {
   private _broadcast: (msg: WsMessage) => void
+  private _onSessionCaptured?: (projectId: string, sessionId: string) => void
+  private _onSetupDone?: (projectId: string) => void
   // Map from projectId → active child processes
   private _installProcesses: Map<string, ChildProcess>
   private _setupProcesses: Map<string, ChildProcess>
@@ -160,8 +199,14 @@ export class SetupManager {
   // Track checkpoint start times
   private _checkpointStart: Map<string, Map<string, number>>
 
-  constructor(broadcast: (msg: WsMessage) => void) {
+  constructor(
+    broadcast: (msg: WsMessage) => void,
+    onSessionCaptured?: (projectId: string, sessionId: string) => void,
+    onSetupDone?: (projectId: string) => void
+  ) {
     this._broadcast = broadcast
+    this._onSessionCaptured = onSessionCaptured
+    this._onSetupDone = onSetupDone
     this._installProcesses = new Map()
     this._setupProcesses = new Map()
     this._checkpoints = new Map()
@@ -205,6 +250,8 @@ export class SetupManager {
           projectId,
           timestamp: new Date().toISOString(),
         })
+        // Validate that hub constants are in sync with the installed core contract
+        validateCoreContract().catch(() => { /* non-fatal */ })
       } else {
         this._broadcast({
           type: 'setup_error',
@@ -298,7 +345,10 @@ export class SetupManager {
 
         if ((parsed.type as string) === 'result') {
           const sid = parsed.session_id as string | undefined
-          if (sid) capturedSessionId = sid
+          if (sid) {
+            capturedSessionId = sid
+            this._onSessionCaptured?.(projectId, sid)
+          }
         }
 
         // Also broadcast as raw log for the collapsible log viewer
@@ -343,6 +393,7 @@ export class SetupManager {
 
         if (isComplete) {
           const summary = computeSummary(projectPath)
+          this._onSetupDone?.(projectId)
           this._broadcast({
             type: 'setup_complete',
             projectId,
@@ -359,6 +410,7 @@ export class SetupManager {
           })
         }
       } else {
+        this._onSetupDone?.(projectId)
         this._broadcast({
           type: 'setup_error',
           projectId,
@@ -502,6 +554,7 @@ export class SetupManager {
 
   abort(projectId: string): void {
     this._stopFilesystemPoll(projectId)
+    this._onSetupDone?.(projectId)
 
     const installChild = this._installProcesses.get(projectId)
     if (installChild?.pid) {

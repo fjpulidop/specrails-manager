@@ -230,6 +230,16 @@ function createTestApp() {
     }
   })
 
+  app.get('/api/health', (_req, res) => {
+    res.json({
+      status: 'ok',
+      version: '0.0.0-test',
+      uptime: Math.floor(process.uptime()),
+      projects: 1,
+      mode: 'legacy',
+    })
+  })
+
   return { app, broadcast, db, queueManager }
 }
 
@@ -533,6 +543,35 @@ describe('API endpoints', () => {
         'github',
         expect.objectContaining({ search: 'bug' })
       )
+    })
+  })
+
+  describe('GET /api/health', () => {
+    it('returns 200 with required fields', async () => {
+      const res = await request(app).get('/api/health')
+
+      expect(res.status).toBe(200)
+      expect(res.body.status).toBe('ok')
+      expect(typeof res.body.version).toBe('string')
+      expect(typeof res.body.uptime).toBe('number')
+      expect(res.body.uptime).toBeGreaterThanOrEqual(0)
+      expect(typeof res.body.projects).toBe('number')
+      expect(res.body.projects).toBeGreaterThanOrEqual(0)
+      expect(['hub', 'legacy']).toContain(res.body.mode)
+    })
+
+    it('returns mode=legacy in legacy (single-project) setup', async () => {
+      const res = await request(app).get('/api/health')
+
+      expect(res.status).toBe(200)
+      expect(res.body.mode).toBe('legacy')
+    })
+
+    it('returns projects=1 in legacy mode', async () => {
+      const res = await request(app).get('/api/health')
+
+      expect(res.status).toBe(200)
+      expect(res.body.projects).toBe(1)
     })
   })
 })
