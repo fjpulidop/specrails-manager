@@ -453,4 +453,108 @@ describe('project-router', () => {
       expect(res.body.paused).toBe(false)
     })
   })
+
+  // ─── GET /activity ──────────────────────────────────────────────────────────
+
+  describe('GET /activity', () => {
+    it('returns empty array when project has no jobs', async () => {
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/activity')
+      expect(res.status).toBe(200)
+      expect(res.body).toEqual([])
+    })
+
+    it('returns 404 for unknown project', async () => {
+      const { app } = createApp()
+      const res = await request(app).get('/api/projects/nonexistent/activity')
+      expect(res.status).toBe(404)
+    })
+
+    it('running job appears as job_started', async () => {
+      db.prepare(
+        "INSERT INTO jobs (id, command, started_at, status) VALUES ('j-run', 'sr:implement', '2025-01-01T10:00:00.000Z', 'running')"
+      ).run()
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/activity')
+      expect(res.status).toBe(200)
+      const item = res.body.find((i: any) => i.jobId === 'j-run')
+      expect(item).toBeDefined()
+      expect(item.type).toBe('job_started')
+      expect(item.costUsd).toBeNull()
+    })
+
+    it('completed job appears as job_completed with costUsd', async () => {
+      db.prepare(
+        "INSERT INTO jobs (id, command, started_at, finished_at, status, total_cost_usd) VALUES ('j-done', 'sr:implement', '2025-01-01T10:00:00.000Z', '2025-01-01T10:05:00.000Z', 'completed', 0.05)"
+      ).run()
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/activity')
+      const item = res.body.find((i: any) => i.jobId === 'j-done')
+      expect(item.type).toBe('job_completed')
+      expect(item.costUsd).toBe(0.05)
+    })
+
+    it('failed job appears as job_failed', async () => {
+      db.prepare(
+        "INSERT INTO jobs (id, command, started_at, finished_at, status) VALUES ('j-fail', 'sr:implement', '2025-01-01T09:00:00.000Z', '2025-01-01T09:01:00.000Z', 'failed')"
+      ).run()
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/activity')
+      const item = res.body.find((i: any) => i.jobId === 'j-fail')
+      expect(item.type).toBe('job_failed')
+    })
+
+    it('canceled job appears as job_canceled', async () => {
+      db.prepare(
+        "INSERT INTO jobs (id, command, started_at, finished_at, status) VALUES ('j-cancel', 'sr:implement', '2025-01-01T08:00:00.000Z', '2025-01-01T08:00:30.000Z', 'canceled')"
+      ).run()
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/activity')
+      const item = res.body.find((i: any) => i.jobId === 'j-cancel')
+      expect(item.type).toBe('job_canceled')
+    })
+
+    it('respects limit param', async () => {
+      for (let i = 0; i < 5; i++) {
+        db.prepare(
+          `INSERT INTO jobs (id, command, started_at, status) VALUES ('lim-${i}', 'cmd', '2025-01-0${i + 1}T10:00:00.000Z', 'completed')`
+        ).run()
+      }
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/activity?limit=2')
+      expect(res.status).toBe(200)
+      expect(res.body.length).toBeLessThanOrEqual(2)
+    })
+
+    it('caps limit at 100', async () => {
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      // Just verify the request succeeds (no 400/500) when limit > 100
+      const res = await request(app).get('/api/projects/proj-1/activity?limit=500')
+      expect(res.status).toBe(200)
+      expect(res.body.length).toBeLessThanOrEqual(100)
+    })
+
+    it('before param filters results', async () => {
+      db.prepare(
+        "INSERT INTO jobs (id, command, started_at, status) VALUES ('before-old', 'cmd', '2024-01-01T10:00:00.000Z', 'completed')"
+      ).run()
+      db.prepare(
+        "INSERT INTO jobs (id, command, started_at, status) VALUES ('before-new', 'cmd', '2025-06-01T10:00:00.000Z', 'completed')"
+      ).run()
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/activity?before=2025-01-01T00:00:00.000Z')
+      expect(res.status).toBe(200)
+      const ids = res.body.map((i: any) => i.jobId)
+      expect(ids).toContain('before-old')
+      expect(ids).not.toContain('before-new')
+    })
+  })
 })

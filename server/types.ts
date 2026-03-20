@@ -142,6 +142,16 @@ export interface ChatMessageRow {
   created_at: string
 }
 
+export interface ActivityItem {
+  id: string
+  type: 'job_started' | 'job_completed' | 'job_failed' | 'job_canceled'
+  jobId: string
+  jobCommand: string
+  timestamp: string
+  summary: string
+  costUsd: number | null
+}
+
 export interface JobSummary {
   id: string
   command: string

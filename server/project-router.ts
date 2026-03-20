@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import type { AnalyticsOpts } from './types'
 import type { ProjectRegistry, ProjectContext } from './project-registry'
 import {
-  listJobs, getJob, getJobEvents, purgeJobs,
+  listJobs, getJob, getJobEvents, purgeJobs, getProjectActivity,
   createConversation, listConversations, getConversation,
   deleteConversation, updateConversation, getMessages,
   getStats,
@@ -170,6 +170,15 @@ export function createProjectRouter(registry: ProjectRegistry): Router {
       console.error('[project-router] purge error:', err)
       res.status(500).json({ error: 'Failed to purge jobs' })
     }
+  })
+
+  router.get('/:projectId/activity', (req: Request, res: Response) => {
+    const limit = Math.min(
+      Math.max(1, parseInt(String(req.query.limit ?? '50'), 10) || 50),
+      100
+    )
+    const before = req.query.before as string | undefined
+    res.json(getProjectActivity(ctx(req).db, { limit, before }))
   })
 
   router.get('/:projectId/stats', (req: Request, res: Response) => {
