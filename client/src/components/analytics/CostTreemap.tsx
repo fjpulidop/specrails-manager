@@ -11,6 +11,7 @@ interface TreemapNode {
   size: number
   jobCount: number
   colorIndex: number
+  [key: string]: unknown
 }
 
 interface ContentProps {
