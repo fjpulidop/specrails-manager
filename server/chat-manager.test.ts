@@ -15,7 +15,7 @@ vi.mock('tree-kill', () => ({
 import { spawn as mockSpawn, execSync as mockExecSync } from 'child_process'
 import treeKill from 'tree-kill'
 import { ChatManager } from './chat-manager'
-import { initDb, createConversation, getConversation } from './db'
+import { initDb, createConversation, getConversation, createJob, finishJob } from './db'
 import type { DbInstance } from './db'
 
 function createMockChildProcess() {
@@ -279,6 +279,131 @@ describe('ChatManager', () => {
     cm.abort('nonexistent')
     expect(treeKill).not.toHaveBeenCalled()
     expect(broadcast).not.toHaveBeenCalled()
+  })
+
+  // ─── Context injection tests ───────────────────────────────────────────────
+
+  describe('context injection', () => {
+    it('system prompt includes project name when provided', async () => {
+      const cmWithName = new ChatManager(broadcast, db, undefined, 'my-cool-project')
+      createConversation(db, { id: 'conv-ctx-1', model: 'claude-sonnet-4-5' })
+      const child = createMockChildProcess()
+      const titleChild = createMockChildProcess()
+      vi.mocked(mockSpawn)
+        .mockReturnValueOnce(child as any)
+        .mockReturnValueOnce(titleChild as any)
+
+      const sendPromise = cmWithName.sendMessage('conv-ctx-1', 'Hello')
+      pushLine(child, assistantEvent('Hi!'))
+      pushLine(child, resultEvent('sess-ctx-1'))
+      await finishProcess(child, 0)
+      await sendPromise
+
+      const spawnArgs = vi.mocked(mockSpawn).mock.calls[0][1] as string[]
+      const sysPromptIdx = spawnArgs.indexOf('--system-prompt')
+      expect(sysPromptIdx).toBeGreaterThan(-1)
+      const systemPrompt = spawnArgs[sysPromptIdx + 1]
+      expect(systemPrompt).toContain('my-cool-project')
+    })
+
+    it('system prompt includes dashboard context section when jobs exist', async () => {
+      createJob(db, { id: 'job-ctx-1', command: '/sr:implement #42', started_at: new Date().toISOString() })
+      finishJob(db, 'job-ctx-1', { exit_code: 0, status: 'completed', total_cost_usd: 0.05, duration_ms: 30000 })
+
+      const cmWithName = new ChatManager(broadcast, db, undefined, 'test-project')
+      createConversation(db, { id: 'conv-ctx-2', model: 'claude-sonnet-4-5' })
+      const child = createMockChildProcess()
+      const titleChild = createMockChildProcess()
+      vi.mocked(mockSpawn)
+        .mockReturnValueOnce(child as any)
+        .mockReturnValueOnce(titleChild as any)
+
+      const sendPromise = cmWithName.sendMessage('conv-ctx-2', 'What ran recently?')
+      pushLine(child, assistantEvent('Here is your context!'))
+      pushLine(child, resultEvent('sess-ctx-2'))
+      await finishProcess(child, 0)
+      await sendPromise
+
+      const spawnArgs = vi.mocked(mockSpawn).mock.calls[0][1] as string[]
+      const sysPromptIdx = spawnArgs.indexOf('--system-prompt')
+      const systemPrompt = spawnArgs[sysPromptIdx + 1]
+      expect(systemPrompt).toContain('Dashboard Context')
+      expect(systemPrompt).toContain('Recent Jobs')
+      expect(systemPrompt).toContain('/sr:implement #42')
+    })
+
+    it('system prompt still works gracefully when DB is empty', async () => {
+      const cmEmpty = new ChatManager(broadcast, db, undefined, 'empty-project')
+      createConversation(db, { id: 'conv-ctx-3', model: 'claude-sonnet-4-5' })
+      const child = createMockChildProcess()
+      const titleChild = createMockChildProcess()
+      vi.mocked(mockSpawn)
+        .mockReturnValueOnce(child as any)
+        .mockReturnValueOnce(titleChild as any)
+
+      const sendPromise = cmEmpty.sendMessage('conv-ctx-3', 'Help')
+      pushLine(child, assistantEvent('Sure!'))
+      pushLine(child, resultEvent('sess-ctx-3'))
+      await finishProcess(child, 0)
+      await sendPromise
+
+      const spawnArgs = vi.mocked(mockSpawn).mock.calls[0][1] as string[]
+      const sysPromptIdx = spawnArgs.indexOf('--system-prompt')
+      expect(sysPromptIdx).toBeGreaterThan(-1)
+      // Should still contain command instruction
+      const systemPrompt = spawnArgs[sysPromptIdx + 1]
+      expect(systemPrompt).toContain(':::command')
+      expect(systemPrompt).toContain('empty-project')
+    })
+
+    it('system prompt is refreshed on each sendMessage call', async () => {
+      createJob(db, { id: 'job-ctx-seq-1', command: '/sr:implement #1', started_at: new Date().toISOString() })
+      finishJob(db, 'job-ctx-seq-1', { exit_code: 0, status: 'completed', total_cost_usd: 0.01, duration_ms: 5000 })
+
+      const cmSeq = new ChatManager(broadcast, db, undefined, 'seq-project')
+      createConversation(db, { id: 'conv-ctx-seq', model: 'claude-sonnet-4-5' })
+
+      const child1 = createMockChildProcess()
+      const titleChild = createMockChildProcess()
+      vi.mocked(mockSpawn)
+        .mockReturnValueOnce(child1 as any)
+        .mockReturnValueOnce(titleChild as any)
+
+      const send1 = cmSeq.sendMessage('conv-ctx-seq', 'First message')
+      pushLine(child1, assistantEvent('First response'))
+      pushLine(child1, resultEvent('sess-seq'))
+      await finishProcess(child1, 0)
+      await send1
+
+      // Add a new job after first send
+      createJob(db, { id: 'job-ctx-seq-2', command: '/sr:review #7', started_at: new Date().toISOString() })
+      finishJob(db, 'job-ctx-seq-2', { exit_code: 0, status: 'completed', total_cost_usd: 0.02, duration_ms: 8000 })
+
+      const child2 = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child2 as any)
+      const send2 = cmSeq.sendMessage('conv-ctx-seq', 'Second message')
+      pushLine(child2, assistantEvent('Second response'))
+      pushLine(child2, resultEvent('sess-seq'))
+      await finishProcess(child2, 0)
+      await send2
+
+      const allSpawnCalls = vi.mocked(mockSpawn).mock.calls
+      // Find main spawns (those with --system-prompt)
+      const mainCalls = allSpawnCalls.filter((c) => (c[1] as string[]).includes('--system-prompt'))
+      expect(mainCalls.length).toBeGreaterThanOrEqual(2)
+
+      const getPrompt = (call: unknown[]) => {
+        const args = call[1] as string[]
+        const idx = args.indexOf('--system-prompt')
+        return args[idx + 1]
+      }
+      const prompt1 = getPrompt(mainCalls[0])
+      const prompt2 = getPrompt(mainCalls[1])
+      // Second prompt should mention the new job
+      expect(prompt2).toContain('/sr:review #7')
+      // First prompt should not have mentioned it yet
+      expect(prompt1).not.toContain('/sr:review #7')
+    })
   })
 
   // ─── Test 12: auto-title spawns separate process on first turn ─────────────
