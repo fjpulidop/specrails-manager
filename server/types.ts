@@ -33,7 +33,7 @@ export interface PhaseMessage {
   projectId?: string
 }
 
-export type JobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'canceled'
+export type JobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'canceled' | 'zombie_terminated'
 
 export interface JobRow {
   id: string
