@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.0](https://github.com/fjpulidop/specrails-hub/compare/v1.6.0...v1.7.0) (2026-03-20)
+
+
+### Features
+
+* **hub:** job comparison and performance trends view (SPEA-131) ([#39](https://github.com/fjpulidop/specrails-hub/issues/39)) ([016a292](https://github.com/fjpulidop/specrails-hub/commit/016a292e7b207f47c0d22fe4be4bfb7e4fef8616))
+* **hub:** project activity timeline and notification center (SPEA-126) ([#37](https://github.com/fjpulidop/specrails-hub/issues/37)) ([9c12919](https://github.com/fjpulidop/specrails-hub/commit/9c1291966d772d98cd0769619d205dd7aef70509))
+
 ## [1.6.0](https://github.com/fjpulidop/specrails-hub/compare/v1.5.0...v1.6.0) (2026-03-20)
 
 
