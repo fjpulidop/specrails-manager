@@ -139,3 +139,17 @@ export function setHubSetting(db: DbInstance, key: string, value: string): void 
     'INSERT OR REPLACE INTO hub_settings (key, value) VALUES (?, ?)'
   ).run(key, value)
 }
+
+// ─── Setup session persistence ────────────────────────────────────────────────
+
+export function setProjectSetupSession(db: DbInstance, projectId: string, sessionId: string): void {
+  setHubSetting(db, `setup_session:${projectId}`, sessionId)
+}
+
+export function getProjectSetupSession(db: DbInstance, projectId: string): string | undefined {
+  return getHubSetting(db, `setup_session:${projectId}`)
+}
+
+export function clearProjectSetupSession(db: DbInstance, projectId: string): void {
+  db.prepare('DELETE FROM hub_settings WHERE key = ?').run(`setup_session:${projectId}`)
+}

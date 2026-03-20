@@ -10,6 +10,9 @@ import {
   touchProject,
   getHubSetting,
   setHubSetting,
+  setProjectSetupSession,
+  getProjectSetupSession,
+  clearProjectSetupSession,
 } from './hub-db'
 import type { DbInstance } from './db'
 
@@ -192,6 +195,39 @@ describe('hub-db', () => {
       setHubSetting(db, 'key2', 'value2')
       expect(getHubSetting(db, 'key1')).toBe('value1')
       expect(getHubSetting(db, 'key2')).toBe('value2')
+    })
+  })
+
+  describe('setup session persistence', () => {
+    it('saves and retrieves a setup session ID', () => {
+      setProjectSetupSession(db, 'proj-1', 'session-abc-123')
+      expect(getProjectSetupSession(db, 'proj-1')).toBe('session-abc-123')
+    })
+
+    it('returns undefined when no session is stored', () => {
+      expect(getProjectSetupSession(db, 'proj-1')).toBeUndefined()
+    })
+
+    it('overwrites an existing session ID', () => {
+      setProjectSetupSession(db, 'proj-1', 'session-old')
+      setProjectSetupSession(db, 'proj-1', 'session-new')
+      expect(getProjectSetupSession(db, 'proj-1')).toBe('session-new')
+    })
+
+    it('clears a session ID', () => {
+      setProjectSetupSession(db, 'proj-1', 'session-abc-123')
+      clearProjectSetupSession(db, 'proj-1')
+      expect(getProjectSetupSession(db, 'proj-1')).toBeUndefined()
+    })
+
+    it('isolates sessions per project', () => {
+      setProjectSetupSession(db, 'proj-1', 'session-one')
+      setProjectSetupSession(db, 'proj-2', 'session-two')
+      expect(getProjectSetupSession(db, 'proj-1')).toBe('session-one')
+      expect(getProjectSetupSession(db, 'proj-2')).toBe('session-two')
+      clearProjectSetupSession(db, 'proj-1')
+      expect(getProjectSetupSession(db, 'proj-1')).toBeUndefined()
+      expect(getProjectSetupSession(db, 'proj-2')).toBe('session-two')
     })
   })
 })

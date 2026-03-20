@@ -318,7 +318,12 @@ export function SetupWizard({ project, onComplete: rawOnComplete, onSkip: rawOnS
       try {
         const res = await fetch(`/api/projects/${project.id}/setup/checkpoints`)
         if (!res.ok) return
-        const data = await res.json() as { checkpoints: CheckpointState[]; isInstalling: boolean; isSettingUp: boolean }
+        const data = await res.json() as { checkpoints: CheckpointState[]; isInstalling: boolean; isSettingUp: boolean; savedSessionId: string | null }
+
+        // Restore session ID from server if not in memory (e.g. server restart)
+        if (data.savedSessionId && !sessionIdRef.current) {
+          setSessionId(data.savedSessionId)
+        }
 
         // Update checkpoints from server
         if (data.checkpoints) {

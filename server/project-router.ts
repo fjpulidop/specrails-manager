@@ -9,6 +9,7 @@ import {
   getStats,
   createProposal, getProposal, listProposals, deleteProposal,
 } from './db'
+import { getProjectSetupSession } from './hub-db'
 import { ClaudeNotFoundError, JobNotFoundError, JobAlreadyTerminalError } from './queue-manager'
 import { resolveCommand } from './command-resolver'
 import { createHooksRouter, getPhaseStates } from './hooks'
@@ -359,10 +360,12 @@ export function createProjectRouter(registry: ProjectRegistry): Router {
   router.get('/:projectId/setup/checkpoints', (req: Request, res: Response) => {
     const { project, setupManager } = ctx(req)
     const checkpoints = setupManager.getCheckpointStatus(project.id, project.path)
+    const savedSessionId = getProjectSetupSession(registry.hubDb, project.id)
     res.json({
       checkpoints,
       isInstalling: setupManager.isInstalling(project.id),
       isSettingUp: setupManager.isSettingUp(project.id),
+      savedSessionId: savedSessionId ?? null,
     })
   })
 

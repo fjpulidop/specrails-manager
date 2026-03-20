@@ -189,6 +189,8 @@ async function validateCoreContract(): Promise<void> {
 
 export class SetupManager {
   private _broadcast: (msg: WsMessage) => void
+  private _onSessionCaptured?: (projectId: string, sessionId: string) => void
+  private _onSetupDone?: (projectId: string) => void
   // Map from projectId → active child processes
   private _installProcesses: Map<string, ChildProcess>
   private _setupProcesses: Map<string, ChildProcess>
@@ -197,8 +199,14 @@ export class SetupManager {
   // Track checkpoint start times
   private _checkpointStart: Map<string, Map<string, number>>
 
-  constructor(broadcast: (msg: WsMessage) => void) {
+  constructor(
+    broadcast: (msg: WsMessage) => void,
+    onSessionCaptured?: (projectId: string, sessionId: string) => void,
+    onSetupDone?: (projectId: string) => void
+  ) {
     this._broadcast = broadcast
+    this._onSessionCaptured = onSessionCaptured
+    this._onSetupDone = onSetupDone
     this._installProcesses = new Map()
     this._setupProcesses = new Map()
     this._checkpoints = new Map()
@@ -337,7 +345,10 @@ export class SetupManager {
 
         if ((parsed.type as string) === 'result') {
           const sid = parsed.session_id as string | undefined
-          if (sid) capturedSessionId = sid
+          if (sid) {
+            capturedSessionId = sid
+            this._onSessionCaptured?.(projectId, sid)
+          }
         }
 
         // Also broadcast as raw log for the collapsible log viewer
@@ -382,6 +393,7 @@ export class SetupManager {
 
         if (isComplete) {
           const summary = computeSummary(projectPath)
+          this._onSetupDone?.(projectId)
           this._broadcast({
             type: 'setup_complete',
             projectId,
@@ -398,6 +410,7 @@ export class SetupManager {
           })
         }
       } else {
+        this._onSetupDone?.(projectId)
         this._broadcast({
           type: 'setup_error',
           projectId,
@@ -541,6 +554,7 @@ export class SetupManager {
 
   abort(projectId: string): void {
     this._stopFilesystemPoll(projectId)
+    this._onSetupDone?.(projectId)
 
     const installChild = this._installProcesses.get(projectId)
     if (installChild?.pid) {

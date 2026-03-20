@@ -15,6 +15,8 @@ import {
   getProject,
   getProjectByPath,
   touchProject,
+  setProjectSetupSession,
+  clearProjectSetupSession,
   type ProjectRow,
 } from './hub-db'
 import { getConfig } from './config'
@@ -112,7 +114,11 @@ export class ProjectRegistry {
 
     const queueManager = new QueueManager(boundBroadcast, db, undefined, project.path)
     const chatManager = new ChatManager(boundBroadcast, db, project.path)
-    const setupManager = new SetupManager(boundBroadcast)
+    const setupManager = new SetupManager(
+      boundBroadcast,
+      (pid, sid) => setProjectSetupSession(this._hubDb, pid, sid),
+      (pid) => clearProjectSetupSession(this._hubDb, pid)
+    )
     const proposalManager = new ProposalManager(boundBroadcast, db, project.path)
 
     // Load commands for this project
