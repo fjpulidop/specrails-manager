@@ -83,6 +83,18 @@ function makeProposalManager(overrides: Partial<{
   }
 }
 
+function makeSpecLauncherManager(overrides: Partial<{
+  isActive: (id: string) => boolean
+  launch: () => Promise<void>
+  cancel: () => void
+}> = {}) {
+  return {
+    isActive: overrides.isActive ?? vi.fn(() => false),
+    launch: overrides.launch ?? vi.fn(async () => {}),
+    cancel: overrides.cancel ?? vi.fn(),
+  }
+}
+
 function makeContext(db: DbInstance, overrides: Partial<ProjectContext> = {}): ProjectContext {
   return {
     project: { id: 'proj-1', slug: 'proj', name: 'Test Project', path: '/tmp', db_path: ':memory:', added_at: '', last_seen_at: '' },
@@ -91,6 +103,7 @@ function makeContext(db: DbInstance, overrides: Partial<ProjectContext> = {}): P
     chatManager: makeChatManager() as any,
     setupManager: makeSetupManager() as any,
     proposalManager: makeProposalManager() as any,
+    specLauncherManager: makeSpecLauncherManager() as any,
     broadcast: vi.fn(),
     ...overrides,
   }
@@ -555,6 +568,70 @@ describe('project-router', () => {
       const ids = res.body.map((i: any) => i.jobId)
       expect(ids).toContain('before-old')
       expect(ids).not.toContain('before-new')
+    })
+  })
+
+  // ─── Spec Launcher ───────────────────────────────────────────────────────────
+
+  describe('POST /:projectId/spec-launcher/start', () => {
+    it('returns 400 if description is missing', async () => {
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app)
+        .post('/api/projects/proj-1/spec-launcher/start')
+        .send({})
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBeTruthy()
+    })
+
+    it('returns 400 if description is empty string', async () => {
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app)
+        .post('/api/projects/proj-1/spec-launcher/start')
+        .send({ description: '   ' })
+      expect(res.status).toBe(400)
+    })
+
+    it('returns 202 with launchId and calls launch', async () => {
+      const launch = vi.fn(async () => {})
+      const slm = makeSpecLauncherManager({ launch })
+      const ctx = makeContext(db, { specLauncherManager: slm as any })
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app)
+        .post('/api/projects/proj-1/spec-launcher/start')
+        .send({ description: 'feat: add dark mode toggle' })
+      expect(res.status).toBe(202)
+      expect(typeof res.body.launchId).toBe('string')
+      expect(res.body.launchId).toBeTruthy()
+      // launch is called asynchronously — wait a tick
+      await new Promise((r) => setTimeout(r, 10))
+      expect(launch).toHaveBeenCalledWith(res.body.launchId, 'feat: add dark mode toggle')
+    })
+  })
+
+  describe('DELETE /:projectId/spec-launcher/:launchId', () => {
+    it('returns 404 if no active launch', async () => {
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app)
+        .delete('/api/projects/proj-1/spec-launcher/nonexistent-id')
+      expect(res.status).toBe(404)
+    })
+
+    it('cancels an active launch and returns ok', async () => {
+      const cancel = vi.fn()
+      const slm = makeSpecLauncherManager({
+        isActive: vi.fn(() => true),
+        cancel,
+      })
+      const ctx = makeContext(db, { specLauncherManager: slm as any })
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app)
+        .delete('/api/projects/proj-1/spec-launcher/some-launch-id')
+      expect(res.status).toBe(200)
+      expect(res.body.ok).toBe(true)
+      expect(cancel).toHaveBeenCalledWith('some-launch-id')
     })
   })
 })

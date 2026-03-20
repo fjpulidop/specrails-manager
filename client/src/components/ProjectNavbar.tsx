@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, BarChart3, Settings, Activity, GitBranch } from 'lucide-react'
+import { LayoutDashboard, BarChart3, Settings, Activity, GitBranch, Sparkles } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import type { HubProject } from '../hooks/useHub'
 import { NotificationCenter } from './NotificationCenter'
 import FeatureFunnelDialog from './FeatureFunnelDialog'
+import { SpecLauncherModal } from './SpecLauncherModal'
 
 interface ProjectNavbarProps {
   project: HubProject
@@ -13,6 +14,7 @@ interface ProjectNavbarProps {
 
 export function ProjectNavbar({ project }: ProjectNavbarProps) {
   const [funnelOpen, setFunnelOpen] = useState(false)
+  const [launcherOpen, setLauncherOpen] = useState(false)
 
   const navItems = [
     { to: '/', end: true, icon: LayoutDashboard, label: 'Home' },
@@ -23,6 +25,7 @@ export function ProjectNavbar({ project }: ProjectNavbarProps) {
   return (
     <>
       <FeatureFunnelDialog open={funnelOpen} onClose={() => setFunnelOpen(false)} />
+      <SpecLauncherModal open={launcherOpen} onClose={() => setLauncherOpen(false)} activeProjectId={project.id} />
 
     <nav className="flex items-center justify-between h-9 px-3 border-b border-border bg-background/50">
       {/* Project name */}
@@ -62,6 +65,19 @@ export function ProjectNavbar({ project }: ProjectNavbarProps) {
             </button>
           </TooltipTrigger>
           <TooltipContent>Feature Funnel — pipeline visual</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => setLauncherOpen(true)}
+              className="h-7 px-2 flex items-center gap-1.5 rounded-md text-xs transition-colors text-muted-foreground hover:text-foreground hover:bg-accent"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>New Change</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Launch a new OpenSpec change with opsx:ff</TooltipContent>
         </Tooltip>
       </div>
 

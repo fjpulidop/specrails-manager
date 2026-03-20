@@ -531,5 +531,28 @@ export function createProjectRouter(registry: ProjectRegistry): Router {
     res.json({ changes })
   })
 
+  // ─── Spec Launcher ───────────────────────────────────────────────────────────
+
+  router.post('/:projectId/spec-launcher/start', (req: Request, res: Response) => {
+    const { description } = req.body ?? {}
+    if (!description || typeof description !== 'string' || !description.trim()) {
+      res.status(400).json({ error: 'description is required' }); return
+    }
+    const launchId = uuidv4()
+    res.status(202).json({ launchId })
+    ctx(req).specLauncherManager.launch(launchId, description.trim()).catch((err) => {
+      console.error('[project-router] spec-launcher error:', err)
+    })
+  })
+
+  router.delete('/:projectId/spec-launcher/:launchId', (req: Request, res: Response) => {
+    const { specLauncherManager } = ctx(req)
+    if (!specLauncherManager.isActive(req.params.launchId)) {
+      res.status(404).json({ error: 'No active launch with that ID' }); return
+    }
+    specLauncherManager.cancel(req.params.launchId)
+    res.json({ ok: true })
+  })
+
   return router
 }
