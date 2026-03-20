@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.0](https://github.com/fjpulidop/specrails-hub/compare/v1.3.1...v1.4.0) (2026-03-20)
+
+
+### Features
+
+* error boundaries, loading skeletons, and global toasts (SPEA-98) ([d3a773e](https://github.com/fjpulidop/specrails-hub/commit/d3a773eb9beb3f687aca27e87da9ff452884e19b))
+* health check, graceful shutdown, RFC-003, hub analytics, setup persistence (SPEA-85/90/91/92) ([dac79fd](https://github.com/fjpulidop/specrails-hub/commit/dac79fdeefd36cf480b3e343ce9b01966c24f1c7))
+
 ## [1.3.1](https://github.com/fjpulidop/specrails-hub/compare/v1.3.0...v1.3.1) (2026-03-19)
 
 
