@@ -575,6 +575,10 @@ server.listen(port, '127.0.0.1', () => {
 
 function shutdown(): void {
   removePidFile()
+  wss.close()
+  if (_legacyDb) {
+    try { _legacyDb.close() } catch { /* ignore */ }
+  }
   server.close(() => {
     process.exit(0)
   })
