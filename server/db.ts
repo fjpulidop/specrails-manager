@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import Database from 'better-sqlite3'
-import type { JobRow, EventRow, StatsRow, JobStatus, ChatConversationRow, ChatMessageRow } from './types'
+import type { JobRow, EventRow, StatsRow, JobStatus, ChatConversationRow, ChatMessageRow, ActivityItem } from './types'
 
 // ─── Proposal types ───────────────────────────────────────────────────────────
 
@@ -377,6 +377,54 @@ export function purgeJobs(
   // Delete the jobs
   const result = db.prepare(`DELETE FROM jobs WHERE ${where}`).run(...params)
   return result.changes
+}
+
+// ─── Activity feed ────────────────────────────────────────────────────────────
+
+export interface ActivityQueryOpts {
+  limit: number
+  before?: string
+}
+
+export function getProjectActivity(db: DbInstance, opts: ActivityQueryOpts): ActivityItem[] {
+  const limit = Math.min(opts.limit, 100)
+  const conditions: string[] = []
+  const params: unknown[] = []
+
+  if (opts.before) {
+    conditions.push('started_at < ?')
+    params.push(opts.before)
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+  const jobs = db
+    .prepare(`SELECT * FROM jobs ${where} ORDER BY started_at DESC LIMIT ?`)
+    .all(...params, limit) as JobRow[]
+
+  return jobs.map((j) => {
+    const isTerminal = j.status === 'completed' || j.status === 'failed' || j.status === 'canceled'
+    const type: ActivityItem['type'] =
+      j.status === 'completed' ? 'job_completed'
+      : j.status === 'failed' ? 'job_failed'
+      : j.status === 'canceled' ? 'job_canceled'
+      : 'job_started'
+    const timestamp = isTerminal && j.finished_at ? j.finished_at : j.started_at
+    const shortCmd = j.command.length > 60 ? j.command.slice(0, 57) + '...' : j.command
+    const summary =
+      type === 'job_started' ? `Job started: ${shortCmd}`
+      : type === 'job_completed' ? `Job completed: ${shortCmd}`
+      : type === 'job_failed' ? `Job failed: ${shortCmd}`
+      : `Job canceled: ${shortCmd}`
+    return {
+      id: j.id,
+      type,
+      jobId: j.id,
+      jobCommand: j.command,
+      timestamp,
+      summary,
+      costUsd: isTerminal ? (j.total_cost_usd ?? null) : null,
+    }
+  })
 }
 
 // ─── Chat DB functions ────────────────────────────────────────────────────────
