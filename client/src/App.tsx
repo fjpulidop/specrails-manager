@@ -165,6 +165,8 @@ function HubApp() {
           />
         ) : (
           <Routes>
+            <Route path="/docs" element={<DocsPage />} />
+            <Route path="/docs/:category/:slug" element={<DocsPage />} />
             {/* Project routes */}
             {projects.length === 0 ? (
               <Route path="*" element={<WelcomeScreen onAddProject={() => setAddDialogOpen(true)} />} />
