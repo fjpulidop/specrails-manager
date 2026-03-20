@@ -124,7 +124,7 @@ export class ProjectRegistry {
     }
 
     const queueManager = new QueueManager(boundBroadcast, db, undefined, project.path)
-    const chatManager = new ChatManager(boundBroadcast, db, project.path)
+    const chatManager = new ChatManager(boundBroadcast, db, project.path, project.name)
     const setupManager = new SetupManager(
       boundBroadcast,
       (pid, sid) => setProjectSetupSession(this._hubDb, pid, sid),

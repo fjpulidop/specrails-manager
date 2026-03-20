@@ -3,11 +3,9 @@ import { createInterface } from 'readline'
 import treeKill from 'tree-kill'
 import type { WsMessage } from './types'
 import type { DbInstance } from './db'
-import { getConversation, addMessage, updateConversation } from './db'
+import { getConversation, addMessage, updateConversation, getStats, listJobs } from './db'
 
-const SYSTEM_PROMPT =
-  'You are a project assistant with full access to this repository via Claude Code. ' +
-  'You can help answer questions about the codebase, explain SpecRails concepts, and suggest commands to run. ' +
+const COMMAND_INSTRUCTION =
   'When you want to suggest a SpecRails command for the user to execute, wrap it in a command block like this: ' +
   ':::command\n/sr:implement #42\n::: ' +
   'The user will be prompted to confirm before the command runs.'
@@ -54,15 +52,73 @@ export class ChatManager {
   private _abortingConversations: Set<string>
 
   private _cwd: string | undefined
+  private _projectName: string | undefined
 
-  constructor(broadcast: (msg: WsMessage) => void, db: DbInstance, cwd?: string) {
+  constructor(broadcast: (msg: WsMessage) => void, db: DbInstance, cwd?: string, projectName?: string) {
     this._broadcast = broadcast
     this._db = db
     this._cwd = cwd
+    this._projectName = projectName
     this._activeProcesses = new Map()
     this._buffers = new Map()
     this._emittedProposals = new Map()
     this._abortingConversations = new Set()
+  }
+
+  private _buildSystemPrompt(): string {
+    const name = this._projectName ?? 'this project'
+
+    let contextSection = ''
+    try {
+      const stats = getStats(this._db)
+      const { jobs: recentJobs } = listJobs(this._db, { limit: 5 })
+
+      // Active job (running or queued at top)
+      const activeJob = recentJobs.find((j) => j.status === 'running' || j.status === 'queued')
+      const activeLine = activeJob
+        ? `**${activeJob.status.toUpperCase()}**: \`${activeJob.command}\``
+        : 'No job currently running.'
+
+      // Recent terminal jobs
+      const terminalJobs = recentJobs.filter(
+        (j) => j.status === 'completed' || j.status === 'failed' || j.status === 'canceled'
+      )
+      const jobLines = terminalJobs.map((j) => {
+        const status = j.status === 'completed' ? '✓' : j.status === 'failed' ? '✗' : '○'
+        const dur = j.duration_ms != null ? `${Math.round(j.duration_ms / 1000)}s` : '—'
+        const cost = j.total_cost_usd != null ? `$${j.total_cost_usd.toFixed(3)}` : '—'
+        const cmd = j.command.length > 60 ? j.command.slice(0, 57) + '...' : j.command
+        return `- ${status} \`${cmd}\` | ${dur} | ${cost}`
+      })
+
+      const successRate =
+        stats.totalJobs > 0
+          ? Math.round(
+              ((stats.totalJobs - (recentJobs.filter((j) => j.status === 'failed').length)) / stats.totalJobs) * 100
+            )
+          : null
+
+      contextSection =
+        `\n\n## Current Dashboard Context\n\n` +
+        `### Active Job\n${activeLine}\n\n` +
+        (jobLines.length > 0 ? `### Recent Jobs\n${jobLines.join('\n')}\n\n` : '') +
+        `### Project Stats\n` +
+        `- Total jobs: ${stats.totalJobs}\n` +
+        `- Jobs today: ${stats.jobsToday}\n` +
+        (successRate != null ? `- Overall success rate: ${successRate}%\n` : '') +
+        `- Total cost: $${stats.totalCostUsd.toFixed(3)}\n` +
+        `- Cost today: $${stats.costToday.toFixed(3)}`
+    } catch {
+      // Context is best-effort; fall back gracefully
+    }
+
+    return (
+      `You are a project assistant for the "${name}" specrails project with full access to this repository via Claude Code. ` +
+      `You can help answer questions about the codebase, explain SpecRails concepts, and suggest commands to run.` +
+      contextSection +
+      `\n\n` +
+      COMMAND_INSTRUCTION
+    )
   }
 
   isActive(conversationId: string): boolean {
@@ -97,13 +153,14 @@ export class ChatManager {
     // Persist user message
     addMessage(this._db, { conversation_id: conversationId, role: 'user', content: userText })
 
-    // Build spawn args
+    // Build spawn args with contextual system prompt
+    const systemPrompt = this._buildSystemPrompt()
     const args: string[] = [
       '--model', conversation.model,
       '--dangerously-skip-permissions',
       '--output-format', 'stream-json',
       '--verbose',
-      '--system-prompt', SYSTEM_PROMPT,
+      '--system-prompt', systemPrompt,
       '-p', userText,
     ]
 
