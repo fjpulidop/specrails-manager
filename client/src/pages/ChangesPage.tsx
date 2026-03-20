@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { GitBranch, Lightbulb, PenLine, ListChecks, Sparkles, Play, Archive, RefreshCw } from 'lucide-react'
+import { GitBranch, Lightbulb, PenLine, ListChecks, Sparkles, Play, Archive, RefreshCw, Eye } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { Button } from '../components/ui/button'
 import { getApiBase } from '../lib/api'
 import { useHub } from '../hooks/useHub'
+import { SpecArtifactBrowserModal } from '../components/SpecArtifactBrowserModal'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -69,10 +70,11 @@ interface ChangeRowProps {
   change: ChangeInfo
   onContinue: (id: string) => void
   onArchive: (id: string) => void
+  onView: (change: ChangeInfo) => void
   actionPending: string | null
 }
 
-function ChangeRow({ change, onContinue, onArchive, actionPending }: ChangeRowProps) {
+function ChangeRow({ change, onContinue, onArchive, onView, actionPending }: ChangeRowProps) {
   const isPending = actionPending === change.id
   const colorClass = phaseColorClass(change.phase)
 
@@ -98,34 +100,45 @@ function ChangeRow({ change, onContinue, onArchive, actionPending }: ChangeRowPr
       </div>
 
       {/* Actions */}
-      {!change.isArchived && (
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-[10px] gap-1"
-            disabled={isPending}
-            onClick={() => onContinue(change.id)}
-          >
-            {isPending ? (
-              <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-            ) : (
-              <Play className="w-2.5 h-2.5" />
-            )}
-            Continue
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-[10px] gap-1 text-muted-foreground"
-            disabled={isPending}
-            onClick={() => onArchive(change.id)}
-          >
-            <Archive className="w-2.5 h-2.5" />
-            Archive
-          </Button>
-        </div>
-      )}
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 px-2 text-[10px] gap-1 text-muted-foreground"
+          onClick={() => onView(change)}
+        >
+          <Eye className="w-2.5 h-2.5" />
+          View
+        </Button>
+        {!change.isArchived && (
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[10px] gap-1"
+              disabled={isPending}
+              onClick={() => onContinue(change.id)}
+            >
+              {isPending ? (
+                <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+              ) : (
+                <Play className="w-2.5 h-2.5" />
+              )}
+              Continue
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[10px] gap-1 text-muted-foreground"
+              disabled={isPending}
+              onClick={() => onArchive(change.id)}
+            >
+              <Archive className="w-2.5 h-2.5" />
+              Archive
+            </Button>
+          </>
+        )}
+      </div>
     </div>
   )
 }
@@ -138,6 +151,7 @@ export default function ChangesPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [actionPending, setActionPending] = useState<string | null>(null)
+  const [viewingChange, setViewingChange] = useState<ChangeInfo | null>(null)
 
   const prevProjectId = useRef(activeProjectId)
 
@@ -185,10 +199,22 @@ export default function ChangesPage() {
 
   const handleContinue = (id: string) => spawnCommand(id, `/opsx:continue ${id}`)
   const handleArchive = (id: string) => spawnCommand(id, `/opsx:archive ${id}`)
+  const handleView = (change: ChangeInfo) => setViewingChange(change)
 
   const activeChanges = changes.filter((c) => !c.isArchived)
 
   return (
+    <>
+    {viewingChange && (
+      <SpecArtifactBrowserModal
+        open={!!viewingChange}
+        onClose={() => setViewingChange(null)}
+        changeId={viewingChange.id}
+        changeName={viewingChange.name}
+        availableArtifacts={viewingChange.artifacts}
+        isArchived={viewingChange.isArchived}
+      />
+    )}
     <div className="flex flex-col gap-4 p-4">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -251,12 +277,14 @@ export default function ChangesPage() {
               change={change}
               onContinue={handleContinue}
               onArchive={handleArchive}
+              onView={handleView}
               actionPending={actionPending}
             />
           ))}
         </div>
       )}
     </div>
+    </>
   )
 }
 

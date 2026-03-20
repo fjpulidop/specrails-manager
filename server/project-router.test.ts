@@ -678,4 +678,70 @@ describe('project-router', () => {
       expect(change.isArchived).toBe(false)
     })
   })
+
+  // ─── Change Artifact Browser ──────────────────────────────────────────────
+
+  describe('GET /:projectId/changes/:changeId/artifacts/:artifact', () => {
+    let tmpDir: string
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specrails-hub-artifacts-test-'))
+    })
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true })
+    })
+
+    function makeCtxWithPath(p: string) {
+      return makeContext(db, {
+        project: { id: 'proj-1', slug: 'proj', name: 'Test', path: p, db_path: ':memory:', added_at: '', last_seen_at: '' },
+      })
+    }
+
+    it('returns 400 for disallowed artifact names', async () => {
+      const ctx = makeCtxWithPath(tmpDir)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/changes/my-change/artifacts/package.json')
+      expect(res.status).toBe(400)
+    })
+
+    it('rejects change IDs with special characters', async () => {
+      const ctx = makeCtxWithPath(tmpDir)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/changes/my%2Fevil/artifacts/proposal.md')
+      expect(res.status).toBe(400)
+    })
+
+    it('returns 404 when artifact file does not exist', async () => {
+      fs.mkdirSync(path.join(tmpDir, 'openspec', 'changes', 'my-change'), { recursive: true })
+      const ctx = makeCtxWithPath(tmpDir)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/changes/my-change/artifacts/proposal.md')
+      expect(res.status).toBe(404)
+    })
+
+    it('returns artifact content from active changes dir', async () => {
+      const changeDir = path.join(tmpDir, 'openspec', 'changes', 'my-change')
+      fs.mkdirSync(changeDir, { recursive: true })
+      fs.writeFileSync(path.join(changeDir, 'proposal.md'), '# My Proposal')
+      const ctx = makeCtxWithPath(tmpDir)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/changes/my-change/artifacts/proposal.md')
+      expect(res.status).toBe(200)
+      expect(res.body.content).toBe('# My Proposal')
+      expect(res.body.artifact).toBe('proposal.md')
+      expect(res.body.changeId).toBe('my-change')
+    })
+
+    it('returns artifact content from archive dir', async () => {
+      const archiveDir = path.join(tmpDir, 'openspec', 'changes', 'archive', 'old-change')
+      fs.mkdirSync(archiveDir, { recursive: true })
+      fs.writeFileSync(path.join(archiveDir, 'design.md'), '# Design')
+      const ctx = makeCtxWithPath(tmpDir)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/changes/old-change/artifacts/design.md')
+      expect(res.status).toBe(200)
+      expect(res.body.content).toBe('# Design')
+    })
+  })
 })

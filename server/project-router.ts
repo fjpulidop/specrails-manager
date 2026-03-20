@@ -1,3 +1,5 @@
+import fs from 'fs'
+import path from 'path'
 import { Router, Request, Response, NextFunction } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import type { AnalyticsOpts } from './types'
@@ -529,6 +531,37 @@ export function createProjectRouter(registry: ProjectRegistry): Router {
       .map((j) => j.command)
     const changes = readChanges(project.path, activeCommands)
     res.json({ changes })
+  })
+
+  // ─── Change Artifact Browser ─────────────────────────────────────────────────
+
+  const ALLOWED_ARTIFACTS = new Set(['proposal.md', 'design.md', 'tasks.md', 'delta-spec.md', 'context-bundle.md'])
+
+  router.get('/:projectId/changes/:changeId/artifacts/:artifact', (req: Request, res: Response) => {
+    const { changeId, artifact } = req.params
+    if (!ALLOWED_ARTIFACTS.has(artifact)) {
+      res.status(400).json({ error: 'Invalid artifact name' }); return
+    }
+    // Sanitize changeId to prevent path traversal
+    if (!/^[\w-]+$/.test(changeId)) {
+      res.status(400).json({ error: 'Invalid change ID' }); return
+    }
+    const { project } = ctx(req)
+    const changesRoot = path.join(project.path, 'openspec', 'changes')
+    // Check active dir first, then archive
+    let filePath = path.join(changesRoot, changeId, artifact)
+    if (!fs.existsSync(filePath)) {
+      filePath = path.join(changesRoot, 'archive', changeId, artifact)
+    }
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ error: 'Artifact not found' }); return
+    }
+    try {
+      const content = fs.readFileSync(filePath, 'utf-8')
+      res.json({ content, artifact, changeId })
+    } catch {
+      res.status(500).json({ error: 'Failed to read artifact' })
+    }
   })
 
   // ─── Spec Launcher ───────────────────────────────────────────────────────────
