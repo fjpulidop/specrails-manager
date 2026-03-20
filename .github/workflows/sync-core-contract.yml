@@ -4,6 +4,9 @@ on:
   repository_dispatch:
     types: [specrails-core-released]
 
+permissions:
+  issues: write
+
 jobs:
   check-compat:
     runs-on: ubuntu-latest
