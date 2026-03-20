@@ -6,6 +6,8 @@ import type { ProjectRegistry } from './project-registry'
 import { getHubSetting, setHubSetting, listProjects } from './hub-db'
 import { createSpecrailsTechClient } from './specrails-tech-client'
 import { checkCoreCompat } from './core-compat'
+import { getHubAnalytics, getHubTodayStats } from './hub-analytics'
+import type { AnalyticsOpts, AnalyticsPeriod } from './types'
 
 function slugify(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -95,10 +97,22 @@ export function createHubRouter(
   // GET /api/hub/state — hub-level state summary
   router.get('/state', (_req, res) => {
     const projects = listProjects(registry.hubDb)
+    const todayStats = getHubTodayStats(registry)
     res.json({
       projects,
       projectCount: projects.length,
+      ...todayStats,
     })
+  })
+
+  // GET /api/hub/analytics?period= — cross-project aggregated analytics
+  router.get('/analytics', (req, res) => {
+    const period = (req.query.period as AnalyticsPeriod | undefined) ?? '7d'
+    const from = req.query.from as string | undefined
+    const to = req.query.to as string | undefined
+    const opts: AnalyticsOpts = { period, from, to }
+    const result = getHubAnalytics(registry, opts)
+    res.json(result)
   })
 
   // GET /api/hub/resolve?path=<cwd> — resolve a project from a filesystem path

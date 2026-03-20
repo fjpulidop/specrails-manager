@@ -15,6 +15,7 @@ import type { CommandInfo, JobSummary } from '../types'
 import { getApiBase } from '../lib/api'
 import { useHub } from '../hooks/useHub'
 import { SpecrailsTechPanel } from '../components/SpecrailsTechPanel'
+import { HubTodayWidget } from '../components/HubTodayWidget'
 
 export default function DashboardPage() {
   const { activeProjectId } = useHub()
@@ -107,6 +108,8 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+      <HubTodayWidget />
+
       <section>
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
           Commands
