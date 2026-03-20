@@ -70,7 +70,7 @@ describe('CommandGrid rendering', () => {
 
   it('shows empty state when no commands provided', () => {
     renderGrid([])
-    expect(screen.getByText(/No commands found/i)).toBeInTheDocument()
+    expect(screen.getByText(/No commands installed/i)).toBeInTheDocument()
   })
 })
 

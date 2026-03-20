@@ -48,3 +48,19 @@ global.IntersectionObserver = vi.fn().mockImplementation(() => ({
 // Mock scrollIntoView (not available in jsdom)
 window.HTMLElement.prototype.scrollIntoView = vi.fn()
 Element.prototype.scrollIntoView = vi.fn()
+
+// localStorage mock (jsdom v25+ does not expose Storage methods by default)
+const _localStorageStore: Record<string, string> = {}
+const localStorageMock = {
+  getItem: (key: string) => _localStorageStore[key] ?? null,
+  setItem: (key: string, value: string) => { _localStorageStore[key] = String(value) },
+  removeItem: (key: string) => { delete _localStorageStore[key] },
+  clear: () => { Object.keys(_localStorageStore).forEach((k) => delete _localStorageStore[k]) },
+  get length() { return Object.keys(_localStorageStore).length },
+  key: (index: number) => Object.keys(_localStorageStore)[index] ?? null,
+}
+Object.defineProperty(window, 'localStorage', { value: localStorageMock, writable: false })
+
+afterEach(() => {
+  localStorageMock.clear()
+})

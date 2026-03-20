@@ -40,7 +40,7 @@ describe('MessageList', () => {
         onDismissCommand={noOp}
       />
     )
-    expect(screen.getByText(/Start a conversation/i)).toBeInTheDocument()
+    expect(screen.getByText(/No messages yet/i)).toBeInTheDocument()
   })
 
   it('renders user message content', () => {
@@ -134,7 +134,7 @@ describe('MessageList', () => {
         onDismissCommand={noOp}
       />
     )
-    expect(screen.queryByText(/Start a conversation/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/No messages yet/i)).not.toBeInTheDocument()
   })
 
   it('does not show streaming text bubble when not streaming', () => {

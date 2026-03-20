@@ -53,6 +53,9 @@ vi.mock('../../components/analytics/CostTreemap', () => ({
 vi.mock('../../components/analytics/BonusMetrics', () => ({
   BonusMetrics: () => <div data-testid="bonus-metrics">BonusMetrics</div>,
 }))
+vi.mock('../../components/analytics/TrendsChart', () => ({
+  TrendsChart: () => <div data-testid="trends-chart">TrendsChart</div>,
+}))
 vi.mock('../../components/analytics/PeriodSelector', () => ({
   PeriodSelector: ({ period, onChange }: { period: string; onChange: (p: string) => void }) => (
     <div data-testid="period-selector">

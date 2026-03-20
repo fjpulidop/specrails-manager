@@ -1,4 +1,6 @@
-# OpenSpec Workflow
+# OpenSpec (opsx) Workflow
+
+> **Note:** The OpenSpec Changes UI (the `/changes` route in the dashboard) was removed in the SPEA-341 redesign. All `opsx:*` commands are now CLI-only — run them from your terminal in the project directory, not from the dashboard.
 
 OpenSpec is the structured change management system built into specrails. Every feature, fix, or refactor goes through a lifecycle of **artifacts** — from problem definition to archived implementation — so that AI agents always have the full context they need.
 
@@ -12,7 +14,7 @@ A **Change** is the unit of work in OpenSpec. It bundles together:
 - A set of **artifacts** (specs, task lists, implementation notes)
 - Status tracking from start to archive
 
-Changes live in your project directory under `.specrails/changes/`. The specrails-hub dashboard shows all changes for a project under the **Changes** route.
+Changes live in your project directory under `.specrails/changes/`.
 
 ---
 
@@ -47,6 +49,8 @@ opsx:archive
 
 ## Commands reference
 
+All commands are run from your terminal inside the project directory. The hub must be running — `opsx:apply` queues a job that you can monitor in the Dashboard.
+
 ### `opsx:new` — Start a new Change
 
 Interactively creates a new change. You provide a title and description; the agent creates the initial artifact structure.
@@ -54,8 +58,6 @@ Interactively creates a new change. You provide a title and description; the age
 ```bash
 specrails-hub /opsx:new
 ```
-
-Or from the dashboard: click **New Change** in the project view.
 
 ---
 
@@ -77,13 +79,13 @@ Artifacts created:
 
 ### `opsx:apply` — Implement the Change
 
-Runs the implementation pipeline using the artifacts as context. The hub queues an Architect → Developer → Reviewer job and streams the output to the dashboard.
+Runs the implementation pipeline using the artifacts as context. The hub queues an Architect → Developer → Reviewer job and streams the output to the Dashboard.
 
 ```bash
 specrails-hub /opsx:apply
 ```
 
-Monitor progress in the Dashboard tab. Each phase shows in real-time.
+Monitor progress in the Dashboard. Each pipeline phase shows in real-time.
 
 ---
 
@@ -159,7 +161,7 @@ For a well-understood bug, go straight to fast-forward:
 
 ```bash
 specrails-hub /opsx:ff
-# Review the generated spec.md to make sure it describes the fix correctly
+# Review the generated spec.md to confirm it describes the fix correctly
 specrails-hub /opsx:apply
 specrails-hub /opsx:verify
 specrails-hub /opsx:archive
@@ -179,17 +181,6 @@ specrails-hub /opsx:apply
 specrails-hub /opsx:verify
 specrails-hub /opsx:archive
 ```
-
----
-
-## Viewing change history
-
-All changes — active and archived — are visible in the dashboard under the **Changes** tab of your project. Each entry shows:
-
-- Title and description
-- Current status (active, in review, archived)
-- Creation date and last updated
-- Links to each artifact
 
 ---
 

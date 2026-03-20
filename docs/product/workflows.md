@@ -6,67 +6,75 @@ Step-by-step guides for the most common tasks in specrails-hub.
 
 ## 1. Implement a new feature
 
-Use this workflow when you want to implement a GitHub issue or a new feature from scratch.
+Use this workflow when you want to implement a GitHub issue or a new feature.
 
 **Prerequisites:** Hub running, project registered, project has specrails-core installed.
 
-### Steps
+### Option A: From the dashboard
 
 1. **Open the dashboard** at `http://127.0.0.1:4200`
-2. **Select your project** from the project switcher in the top navigation
-3. **Start the implementation** — two options:
-   - **From the UI:** Click **New Change** → `opsx:ff` to fast-forward through artifact creation → the hub automatically queues the implementation job
-   - **From the CLI:** Run from inside your project directory:
-     ```bash
-     specrails-hub implement "#42"
-     ```
-4. **Monitor the pipeline** — the Dashboard tab shows the active phase in real-time:
+2. **Select your project** from the tab bar
+3. **Click Implement** in the DELIVERY section of the CommandGrid
+4. **Fill in the wizard** — enter the issue number or a description
+5. **Monitor the pipeline** — the Dashboard shows the active phase in real-time:
    ```
    Architect → Developer → Reviewer → Ship
    ```
-5. **Watch logs** — the log panel streams Claude's output as it runs. Each phase transition is highlighted.
-6. **Review results** — when all phases complete, the job entry in the Jobs tab shows the final exit code, duration, and token cost.
+6. **Watch logs** — the log panel streams Claude's output as it runs
+7. **Review results** — the job entry in the Recent Jobs table shows the exit code, duration, and token cost
+
+### Option B: From the CLI
+
+```bash
+cd ~/repos/my-app
+specrails-hub implement "#42"
+```
 
 ---
 
 ## 2. Batch implementation (multiple issues)
 
-Use this when you have several independent issues to implement in parallel.
+Use this when you have several independent issues to implement.
 
-### Steps
+### From the dashboard
 
-1. **From the CLI**, run:
-   ```bash
-   specrails-hub batch-implement "#40" "#41" "#43"
-   ```
-   Or use the shorthand verb:
-   ```bash
-   specrails-hub batch-implement #40 #41 #43
-   ```
-2. The hub creates one job per issue and runs them concurrently (subject to system resources).
-3. **Monitor all jobs** in the Dashboard tab — each job shows its own phase indicator and log stream.
-4. The Jobs tab lists each job individually with its own status and cost.
+1. Click **Batch Implement** in the DELIVERY section
+2. Enter a list of issue numbers in the wizard
+3. Each issue becomes a separate job, visible in Recent Jobs
+
+### From the CLI
+
+```bash
+specrails-hub batch-implement "#40" "#41" "#43"
+```
+
+Jobs run concurrently (subject to system resources). Monitor all jobs in the Dashboard.
 
 ---
 
-## 3. Review and approve a Change
+## 3. Implement using OpenSpec artifacts
 
-Use this after a Developer phase completes, to verify the implementation matches the spec before archiving.
+Use this when you have created OpenSpec change artifacts (`opsx:new` or `opsx:ff`) and want to apply them.
 
-### Steps
+> All `opsx:*` commands run from the CLI inside your project directory. The job queues in the hub and is visible in the Dashboard.
 
-1. Ensure you are inside the project directory in your terminal.
-2. **Verify** the change:
-   ```bash
-   specrails-hub /opsx:verify
-   ```
-   The Reviewer agent checks that the implementation matches all change artifacts.
-3. **Resolve any blockers** flagged by the Reviewer — these appear in the log stream and in the chat panel.
-4. Once verification passes, **archive** the change:
-   ```bash
-   specrails-hub /opsx:archive
-   ```
-   This moves the change to the archived state and marks it complete.
+```bash
+cd ~/repos/my-app
+
+# 1. Create the change and generate all artifacts
+specrails-hub /opsx:ff
+
+# 2. Implement using the artifacts
+specrails-hub /opsx:apply
+
+# 3. Verify the implementation matches the spec
+specrails-hub /opsx:verify
+
+# 4. Archive the change
+specrails-hub /opsx:archive
+```
+
+See [OpenSpec Workflow](openspec-workflow.md) for the full command reference.
 
 ---
 
@@ -76,7 +84,7 @@ The Chat panel lets you talk to Claude in the context of the active project — 
 
 ### Steps
 
-1. Click **Chat** in the project sidebar.
+1. The chat sidebar is always visible in the project layout — no navigation needed.
 2. Type your message and press Enter.
 3. Claude responds with the project directory as its working context.
 
@@ -85,11 +93,11 @@ The Chat panel lets you talk to Claude in the context of the active project — 
 | Command | What it does |
 |---------|--------------|
 | `/sr:implement #42` | Start an implementation job for issue #42 |
-| `/sr:why` | Explain what specrails is doing |
+| `/sr:propose-spec` | Propose a spec for a new feature |
 | `/sr:health-check` | Run a codebase health check |
-| `/opsx:ff` | Fast-forward through artifact creation |
-| `/opsx:verify` | Verify the current change |
-| `/opsx:archive` | Archive the current change |
+| `/sr:why` | Explain what specrails is doing |
+| `/sr:refactor-recommender` | Identify refactoring opportunities |
+| `/sr:compat-check` | Check for breaking API changes |
 
 ---
 
@@ -97,11 +105,9 @@ The Chat panel lets you talk to Claude in the context of the active project — 
 
 Use this when registering a new codebase with the hub.
 
-### Steps
-
 **Option A: From the dashboard**
 
-1. Click **Add Project** in the top navigation bar.
+1. Click **+** (add project) in the tab bar.
 2. Enter the absolute path to your project (e.g., `/Users/you/projects/my-app`).
 3. Click **Add**.
 
