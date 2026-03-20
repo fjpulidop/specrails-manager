@@ -44,7 +44,7 @@ On first launch with no projects, you'll see a welcome screen with an "Add your 
 ```
 ~/.specrails/
   hub.sqlite              # project registry (name, path, slug)
-  hub.pid                 # server PID for clean shutdown
+  manager.pid             # server PID for clean shutdown
   projects/
     my-app/jobs.sqlite    # isolated DB per project (jobs, events, chat)
     api-srv/jobs.sqlite

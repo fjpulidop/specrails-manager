@@ -18,10 +18,10 @@ describe('StatusBar', () => {
     expect(screen.getByText('connected')).toBeInTheDocument()
   })
 
-  it('shows "connecting..." text when connectionStatus is connecting', () => {
+  it('shows "reconnecting..." text when connectionStatus is connecting', () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: false })
     render(<StatusBar connectionStatus="connecting" />)
-    expect(screen.getByText('connecting...')).toBeInTheDocument()
+    expect(screen.getByText('reconnecting...')).toBeInTheDocument()
   })
 
   it('shows "disconnected" text when connectionStatus is disconnected', () => {

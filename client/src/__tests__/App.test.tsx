@@ -9,6 +9,7 @@ vi.mock('sonner', () => ({
     error: vi.fn(),
     success: vi.fn(),
   },
+  Toaster: () => null,
 }))
 
 vi.mock('../lib/api', () => ({
