@@ -1,5 +1,6 @@
 import { CheckCircle2, Loader2, XCircle, Circle } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
+import { cn } from '../lib/utils'
 import type { PhaseDefinition } from '../types'
 import type { PhaseMap, PhaseState } from '../hooks/usePipeline'
 
@@ -15,21 +16,28 @@ export function PipelineProgress({ phases, phaseDefinitions }: PipelineProgressP
     <div className="flex items-center">
       {phaseDefinitions.map((phaseDef, idx) => {
         const state: PhaseState = phases[phaseDef.key] ?? 'idle'
+        const nextState: PhaseState | null =
+          idx < phaseDefinitions.length - 1
+            ? (phases[phaseDefinitions[idx + 1].key] ?? 'idle')
+            : null
+
         return (
           <div key={phaseDef.key} className="flex items-center">
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="flex flex-col items-center gap-1 cursor-default px-3">
-                  <PhaseIcon state={state} />
+                <div className="flex flex-col items-center gap-1.5 cursor-default px-4">
+                  <PhaseNode state={state} />
                   <span
-                    className="text-[10px] font-medium"
-                    style={{
-                      color:
-                        state === 'running' ? 'hsl(213 72% 59%)'
-                          : state === 'done' ? 'hsl(142 71% 45%)'
-                          : state === 'error' ? 'hsl(0 72% 51%)'
-                          : 'hsl(215 20% 55%)',
-                    }}
+                    className={cn(
+                      'text-xs font-medium transition-colors',
+                      state === 'running'
+                        ? 'text-blue-400'
+                        : state === 'done'
+                          ? 'text-emerald-400'
+                          : state === 'error'
+                            ? 'text-red-400'
+                            : 'text-muted-foreground/40',
+                    )}
                   >
                     {phaseDef.label}
                   </span>
@@ -41,14 +49,16 @@ export function PipelineProgress({ phases, phaseDefinitions }: PipelineProgressP
               </TooltipContent>
             </Tooltip>
 
-            {idx < phaseDefinitions.length - 1 && (
+            {nextState !== null && (
               <div
-                className="h-px w-8 -mt-4 shrink-0"
-                style={{
-                  background: phases[phaseDefinitions[idx + 1].key] !== 'idle' || state === 'done'
-                    ? 'hsl(142 71% 45% / 0.4)'
-                    : 'hsl(217 33% 17%)',
-                }}
+                className={cn(
+                  'h-px w-12 -mt-5 shrink-0 transition-all duration-300',
+                  nextState === 'done' || state === 'done'
+                    ? 'bg-emerald-500/30'
+                    : nextState === 'running'
+                      ? 'bg-blue-400/40'
+                      : 'bg-border/30',
+                )}
               />
             )}
           </div>
@@ -58,9 +68,24 @@ export function PipelineProgress({ phases, phaseDefinitions }: PipelineProgressP
   )
 }
 
-function PhaseIcon({ state }: { state: PhaseState }) {
-  if (state === 'running') return <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
-  if (state === 'done') return <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-  if (state === 'error') return <XCircle className="w-4 h-4 text-red-400" />
-  return <Circle className="w-4 h-4 text-muted-foreground/30" />
+function PhaseNode({ state }: { state: PhaseState }) {
+  return (
+    <div
+      className={cn(
+        'flex items-center justify-center w-10 h-10 rounded-full transition-all duration-300',
+        state === 'running'
+          ? 'bg-blue-500/10 ring-1 ring-blue-400/30 animate-pulse'
+          : state === 'done'
+            ? 'bg-emerald-500/10'
+            : state === 'error'
+              ? 'bg-red-500/10'
+              : 'bg-muted/20',
+      )}
+    >
+      {state === 'running' && <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />}
+      {state === 'done' && <CheckCircle2 className="w-6 h-6 text-emerald-400" />}
+      {state === 'error' && <XCircle className="w-6 h-6 text-red-400" />}
+      {state === 'idle' && <Circle className="w-6 h-6 text-muted-foreground/20" />}
+    </div>
+  )
 }

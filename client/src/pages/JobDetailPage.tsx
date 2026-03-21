@@ -8,6 +8,7 @@ import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
 import { PipelineProgress } from '../components/PipelineProgress'
+import { JobCompletionSummary } from '../components/JobCompletionSummary'
 import { LogViewer } from '../components/LogViewer'
 import { useSharedWebSocket } from '../hooks/useSharedWebSocket'
 import type { JobSummary, EventRow, PhaseDefinition } from '../types'
@@ -184,7 +185,7 @@ export default function JobDetailPage() {
         {/* Job info */}
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1 min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div>
@@ -193,13 +194,11 @@ export default function JobDetailPage() {
                 </TooltipTrigger>
                 <TooltipContent>{statusInfo.tooltip}</TooltipContent>
               </Tooltip>
-              <code className="text-xs font-mono text-foreground/80 truncate">{job.command}</code>
+              <code className="text-sm font-mono text-foreground/90 truncate">{job.command}</code>
             </div>
-            <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
               <span>Started {formatDistanceToNow(new Date(job.started_at), { addSuffix: true })}</span>
-              {job.total_cost_usd && <span>${job.total_cost_usd.toFixed(4)}</span>}
-              {job.duration_ms && <span>{(job.duration_ms / 1000).toFixed(1)}s</span>}
-              {job.model && <span>{job.model}</span>}
+              {job.model && <span className="text-muted-foreground/40">{job.model}</span>}
             </div>
           </div>
 
@@ -228,6 +227,15 @@ export default function JobDetailPage() {
         {/* Pipeline progress */}
         <PipelineProgress phases={phases} phaseDefinitions={phaseDefinitions} />
       </div>
+
+      {/* Completion summary — only shown when job has finished */}
+      {(job.status === 'completed' || job.status === 'failed') && (
+        <JobCompletionSummary
+          job={job}
+          events={events}
+          defaultOpen={job.status === 'completed'}
+        />
+      )}
 
       {/* Log viewer */}
       <div className="flex-1 overflow-hidden relative">
