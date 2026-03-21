@@ -62,18 +62,19 @@ describe('hub-db', () => {
       expect(names).toContain('idx_projects_path')
     })
 
-    it('applies migrations 1 and 2 and records them', () => {
+    it('applies migrations 1, 2, and 3 and records them', () => {
       const versions = db.prepare('SELECT version FROM schema_migrations ORDER BY version').all() as { version: number }[]
-      expect(versions).toHaveLength(2)
+      expect(versions).toHaveLength(3)
       expect(versions[0].version).toBe(1)
       expect(versions[1].version).toBe(2)
+      expect(versions[2].version).toBe(3)
     })
 
     it('is idempotent — calling initHubDb again does not fail', () => {
       // Re-init on same DB (in-memory so we just call again)
       const db2 = makeDb()
       const versions = db2.prepare('SELECT version FROM schema_migrations').all() as { version: number }[]
-      expect(versions).toHaveLength(2)
+      expect(versions).toHaveLength(3)
     })
   })
 
@@ -87,8 +88,14 @@ describe('hub-db', () => {
       expect(row.name).toBe('My Project 1')
       expect(row.path).toBe('/home/user/projects/project-1')
       expect(row.db_path).toBeTruthy()
+      expect(row.provider).toBe('claude')
       expect(row.added_at).toBeTruthy()
       expect(row.last_seen_at).toBeTruthy()
+    })
+
+    it('stores the specified provider', () => {
+      const row = addProject(db, { ...makeProjectOpts(), provider: 'codex' })
+      expect(row.provider).toBe('codex')
     })
 
     it('throws on duplicate slug', () => {
