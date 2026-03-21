@@ -1,0 +1,275 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { renderHook, act, waitFor } from '@testing-library/react'
+import React from 'react'
+import { HubProvider, useHub } from '../useHub'
+import { SharedWebSocketProvider } from '../useSharedWebSocket'
+
+vi.mock('../../lib/api', () => ({
+  setApiContext: vi.fn(),
+  getApiBase: () => '/api',
+}))
+
+class MockWebSocket {
+  static instances: MockWebSocket[] = []
+  onopen: (() => void) | null = null
+  onmessage: ((e: { data: string }) => void) | null = null
+  onclose: (() => void) | null = null
+  readyState = 1
+
+  constructor(public url: string) {
+    MockWebSocket.instances.push(this)
+    setTimeout(() => this.onopen?.(), 0)
+  }
+
+  send(_data: string) {}
+  close() { this.onclose?.() }
+
+  simulateMessage(data: unknown) {
+    this.onmessage?.({ data: JSON.stringify(data) })
+  }
+}
+
+function makeWrapper() {
+  return function Wrapper({ children }: { children: React.ReactNode }) {
+    return React.createElement(
+      SharedWebSocketProvider,
+      { url: 'ws://localhost:4200' },
+      React.createElement(HubProvider, null, children)
+    )
+  }
+}
+
+function makeProject(overrides: Partial<{ id: string; name: string }> = {}) {
+  return {
+    id: overrides.id ?? 'proj-1',
+    slug: overrides.id ?? 'proj-1',
+    name: overrides.name ?? 'Project One',
+    path: '/path/to/proj',
+    db_path: '/path/.specrails/jobs.sqlite',
+    added_at: '2024-01-01T00:00:00Z',
+    last_seen_at: '2024-01-01T00:00:00Z',
+  }
+}
+
+describe('useHub - error paths', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    MockWebSocket.instances = []
+    ;(global as unknown as Record<string, unknown>).WebSocket = MockWebSocket
+    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ projects: [] }),
+    })
+  })
+
+  it('addProject: throws when fetch returns non-ok', async () => {
+    ;(global.fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ projects: [] }) })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        json: () => Promise.resolve({ error: 'Project already exists' }),
+      })
+
+    const { result } = renderHook(() => useHub(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    await expect(
+      act(async () => {
+        await result.current.addProject('/path/to/existing')
+      })
+    ).rejects.toThrow('Project already exists')
+  })
+
+  it('addProject: throws with HTTP status when no error message', async () => {
+    ;(global.fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ projects: [] }) })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({}),
+      })
+
+    const { result } = renderHook(() => useHub(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    await expect(
+      act(async () => {
+        await result.current.addProject('/path/to/proj')
+      })
+    ).rejects.toThrow('HTTP 500')
+  })
+
+  it('addProject: with optional name parameter includes name in body', async () => {
+    const newProject = makeProject({ id: 'named-proj', name: 'Named Project' })
+    ;(global.fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ projects: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ project: newProject }) })
+
+    const { result } = renderHook(() => useHub(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    await act(async () => {
+      await result.current.addProject('/path/to/proj', 'Named Project')
+    })
+
+    const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls
+    const postCall = calls.find((c: [string, RequestInit]) => c[1]?.method === 'POST')
+    expect(postCall).toBeDefined()
+    const body = JSON.parse(postCall![1].body as string)
+    expect(body.name).toBe('Named Project')
+  })
+
+  it('removeProject: throws when fetch returns non-ok', async () => {
+    ;(global.fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ projects: [makeProject()] }) })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({ error: 'Project not found' }),
+      })
+
+    const { result } = renderHook(() => useHub(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    await expect(
+      act(async () => {
+        await result.current.removeProject('proj-1')
+      })
+    ).rejects.toThrow('Project not found')
+  })
+
+  it('removeProject: throws with HTTP status when no error message', async () => {
+    ;(global.fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ projects: [makeProject()] }) })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        json: () => Promise.resolve({}),
+      })
+
+    const { result } = renderHook(() => useHub(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    await expect(
+      act(async () => {
+        await result.current.removeProject('proj-1')
+      })
+    ).rejects.toThrow('HTTP 403')
+  })
+
+  it('fetch non-ok on initial load: isLoading becomes false, projects stays empty', async () => {
+    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: false })
+
+    const { result } = renderHook(() => useHub(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    expect(result.current.projects).toHaveLength(0)
+  })
+
+  it('WS hub.project_added: does not add duplicate project', async () => {
+    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ projects: [makeProject({ id: 'dup-proj' })] }),
+    })
+
+    const { result } = renderHook(() => useHub(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    await waitFor(() => MockWebSocket.instances.length > 0)
+    const ws = MockWebSocket.instances[0]
+    await act(async () => { ws.onopen?.() })
+
+    // Simulate adding the same project again
+    act(() => {
+      ws.simulateMessage({
+        type: 'hub.project_added',
+        project: makeProject({ id: 'dup-proj', name: 'Duplicate Project' }),
+      })
+    })
+
+    // Should still only have 1 project (duplicate not added)
+    expect(result.current.projects).toHaveLength(1)
+  })
+
+  it('WS hub.project_removed: does not deactivate if different project is active', async () => {
+    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        projects: [
+          makeProject({ id: 'proj-keep' }),
+          makeProject({ id: 'proj-remove' }),
+        ],
+      }),
+    })
+
+    const { result } = renderHook(() => useHub(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    // Set active to proj-keep
+    act(() => { result.current.setActiveProjectId('proj-keep') })
+    expect(result.current.activeProjectId).toBe('proj-keep')
+
+    await waitFor(() => MockWebSocket.instances.length > 0)
+    const ws = MockWebSocket.instances[0]
+    await act(async () => { ws.onopen?.() })
+
+    act(() => {
+      ws.simulateMessage({ type: 'hub.project_removed', projectId: 'proj-remove' })
+    })
+
+    // Active project should remain proj-keep since we removed proj-remove
+    expect(result.current.activeProjectId).toBe('proj-keep')
+    expect(result.current.projects).toHaveLength(1)
+  })
+
+  it('WS ignores messages with non-string type', async () => {
+    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ projects: [makeProject()] }),
+    })
+
+    const { result } = renderHook(() => useHub(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    await waitFor(() => MockWebSocket.instances.length > 0)
+    const ws = MockWebSocket.instances[0]
+    await act(async () => { ws.onopen?.() })
+
+    const before = result.current.projects.length
+
+    act(() => {
+      ws.simulateMessage({ type: 42, something: 'bad' })
+    })
+
+    // No change since type is not a string
+    expect(result.current.projects.length).toBe(before)
+  })
+
+  it('WS hub.projects: keeps active project if it exists in new list', async () => {
+    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ projects: [makeProject({ id: 'existing' })] }),
+    })
+
+    const { result } = renderHook(() => useHub(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.activeProjectId).toBe('existing'))
+
+    await waitFor(() => MockWebSocket.instances.length > 0)
+    const ws = MockWebSocket.instances[0]
+    await act(async () => { ws.onopen?.() })
+
+    act(() => {
+      ws.simulateMessage({
+        type: 'hub.projects',
+        projects: [
+          makeProject({ id: 'existing' }),
+          makeProject({ id: 'new-one' }),
+        ],
+      })
+    })
+
+    // active project stays 'existing' since it's still in the list
+    expect(result.current.activeProjectId).toBe('existing')
+  })
+})

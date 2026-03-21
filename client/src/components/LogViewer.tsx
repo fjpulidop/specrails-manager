@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, useCallback, memo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
-import { Search, ChevronDown, ChevronRight } from 'lucide-react'
+import { Search, ChevronDown, ChevronRight, Copy } from 'lucide-react'
+import { toast } from 'sonner'
 import { Input } from './ui/input'
 import { Button } from './ui/button'
 import { cn } from '../lib/utils'
@@ -249,7 +250,22 @@ export function LogViewer({ events, isLoading }: LogViewerProps) {
             className="pl-7 h-7"
           />
         </div>
-        <span className="text-[10px] text-muted-foreground ml-auto">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-muted-foreground/50 hover:text-foreground"
+          onClick={() => {
+            const text = processedLines.map((l) => l.content).join('\n')
+            navigator.clipboard.writeText(text).then(() => {
+              toast.success('Log copied to clipboard')
+            }).catch(() => {
+              toast.error('Failed to copy log')
+            })
+          }}
+        >
+          <Copy className="w-3.5 h-3.5" />
+        </Button>
+        <span className="text-[10px] text-muted-foreground">
           {filteredCount} / {totalLines} lines
         </span>
       </div>
