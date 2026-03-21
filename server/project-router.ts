@@ -458,6 +458,7 @@ export function createProjectRouter(registry: ProjectRegistry): Router {
       isInstalling: setupManager.isInstalling(project.id),
       isSettingUp: setupManager.isSettingUp(project.id),
       savedSessionId: savedSessionId ?? null,
+      logLines: setupManager.getInstallLog(project.id),
     })
   })
 

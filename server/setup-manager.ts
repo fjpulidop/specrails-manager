@@ -187,6 +187,8 @@ async function validateCoreContract(): Promise<void> {
 
 // ─── SetupManager ─────────────────────────────────────────────────────────────
 
+const INSTALL_LOG_BUFFER_MAX = 2000
+
 export class SetupManager {
   private _broadcast: (msg: WsMessage) => void
   private _onSessionCaptured?: (projectId: string, sessionId: string) => void
@@ -198,6 +200,8 @@ export class SetupManager {
   private _checkpoints: Map<string, Map<string, CheckpointStatus>>
   // Track checkpoint start times
   private _checkpointStart: Map<string, Map<string, number>>
+  // Ring buffer for install log lines — allows clients to recover log on reconnect
+  private _installLogBuffer: Map<string, string[]>
 
   constructor(
     broadcast: (msg: WsMessage) => void,
@@ -212,6 +216,7 @@ export class SetupManager {
     this._checkpoints = new Map()
     this._checkpointStart = new Map()
     this._pollTimers = new Map()
+    this._installLogBuffer = new Map()
   }
 
   // ─── Install: npx specrails-core ─────────────────────────────────────────────
@@ -230,15 +235,25 @@ export class SetupManager {
     })
 
     this._installProcesses.set(projectId, child)
+    this._installLogBuffer.set(projectId, [])
 
     const stdoutReader = createInterface({ input: child.stdout!, crlfDelay: Infinity })
     const stderrReader = createInterface({ input: child.stderr!, crlfDelay: Infinity })
 
+    const appendLog = (line: string) => {
+      const buf = this._installLogBuffer.get(projectId) ?? []
+      buf.push(line)
+      if (buf.length > INSTALL_LOG_BUFFER_MAX) buf.splice(0, buf.length - INSTALL_LOG_BUFFER_MAX)
+      this._installLogBuffer.set(projectId, buf)
+    }
+
     stdoutReader.on('line', (line) => {
+      appendLog(line)
       this._broadcast({ type: 'setup_log', projectId, line, stream: 'stdout' })
     })
 
     stderrReader.on('line', (line) => {
+      appendLog(line)
       this._broadcast({ type: 'setup_log', projectId, line, stream: 'stderr' })
     })
 
@@ -580,6 +595,10 @@ export class SetupManager {
     }
 
     return CHECKPOINTS.map((def) => statuses.get(def.key) ?? { key: def.key, name: def.name, status: 'pending' as const })
+  }
+
+  getInstallLog(projectId: string): string[] {
+    return this._installLogBuffer.get(projectId) ?? []
   }
 
   // ─── Abort ────────────────────────────────────────────────────────────────────
