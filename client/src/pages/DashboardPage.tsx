@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { toast } from 'sonner'
@@ -16,6 +16,7 @@ import { getApiBase } from '../lib/api'
 import { useHub } from '../hooks/useHub'
 import { SpecrailsTechPanel } from '../components/SpecrailsTechPanel'
 import { HubTodayWidget } from '../components/HubTodayWidget'
+import { ProjectHealthWidget } from '../components/ProjectHealthWidget'
 
 export default function DashboardPage() {
   const { activeProjectId } = useHub()
@@ -60,6 +61,22 @@ export default function DashboardPage() {
     },
     pollInterval: 10_000,
   })
+
+  // Per-command stats derived from the recent jobs already in state
+  const enrichedCommands = useMemo(() => {
+    const statsMap: Record<string, { totalRuns: number; lastRunAt: string | null }> = {}
+    for (const job of rawJobs) {
+      const match = job.command.match(/^\/sr:([^\s]+)/)
+      if (!match) continue
+      const slug = match[1]
+      if (!statsMap[slug]) statsMap[slug] = { totalRuns: 0, lastRunAt: null }
+      statsMap[slug].totalRuns += 1
+      if (!statsMap[slug].lastRunAt || job.started_at > statsMap[slug].lastRunAt!) {
+        statsMap[slug].lastRunAt = job.started_at
+      }
+    }
+    return commands.map((cmd) => ({ ...cmd, ...statsMap[cmd.slug] }))
+  }, [commands, rawJobs])
 
   const PROPOSAL_STATUS_MAP: Record<string, JobSummary['status']> = {
     input: 'queued',
@@ -110,6 +127,8 @@ export default function DashboardPage() {
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
       <HubTodayWidget />
 
+      <ProjectHealthWidget />
+
       <section>
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
           Commands
@@ -122,7 +141,7 @@ export default function DashboardPage() {
           </div>
         ) : (
           <CommandGrid
-            commands={commands}
+            commands={enrichedCommands}
             onOpenWizard={(slug) => setWizardOpen(slug)}
           />
         )}

@@ -13,6 +13,15 @@ vi.mock('sonner', () => ({
   },
 }))
 
+// useBlocker requires a data router; stub it out for unit tests
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-router-dom')>()
+  return {
+    ...actual,
+    useBlocker: () => ({ state: 'unblocked', proceed: vi.fn(), reset: vi.fn() }),
+  }
+})
+
 vi.mock('../../lib/api', () => ({
   getApiBase: () => '/api',
 }))

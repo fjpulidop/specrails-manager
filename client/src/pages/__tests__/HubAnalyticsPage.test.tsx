@@ -1,0 +1,173 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { screen, waitFor, fireEvent } from '@testing-library/react'
+import { render } from '../../test-utils'
+
+// Mock recharts
+vi.mock('recharts', () => ({
+  ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  LineChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  BarChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Line: () => null,
+  Bar: () => null,
+  XAxis: () => null,
+  YAxis: () => null,
+  CartesianGrid: () => null,
+  Tooltip: () => null,
+}))
+
+// Mock useSharedWebSocket
+vi.mock('../../hooks/useSharedWebSocket', () => ({
+  useSharedWebSocket: () => ({
+    registerHandler: vi.fn(),
+    unregisterHandler: vi.fn(),
+    connectionStatus: 'connected' as const,
+  }),
+}))
+
+const mockAnalyticsData = {
+  period: { label: 'Last 7 days', from: null, to: null },
+  kpi: {
+    totalCostUsd: 2.5,
+    totalJobs: 50,
+    successRate: 0.88,
+    costToday: 0.12,
+    jobsToday: 5,
+  },
+  costTimeline: [
+    { date: '2024-01-01', costUsd: 0.5 },
+    { date: '2024-01-02', costUsd: 0.8 },
+  ],
+  projectBreakdown: [
+    {
+      projectId: 'proj-1',
+      projectName: 'Project Alpha',
+      totalCostUsd: 1.5,
+      totalJobs: 30,
+      successRate: 0.9,
+      avgDurationMs: 60000,
+    },
+  ],
+}
+
+describe('HubAnalyticsPage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => mockAnalyticsData,
+    })
+  })
+
+  it('renders Hub Analytics heading', async () => {
+    const HubAnalyticsPage = (await import('../HubAnalyticsPage')).default
+    render(<HubAnalyticsPage />)
+    expect(screen.getByText('Hub Analytics')).toBeInTheDocument()
+  })
+
+  it('renders loading skeleton initially', async () => {
+    ;(global.fetch as ReturnType<typeof vi.fn>).mockImplementation(
+      () => new Promise(() => {}) // never resolves
+    )
+
+    const HubAnalyticsPage = (await import('../HubAnalyticsPage')).default
+    render(<HubAnalyticsPage />)
+    // Loading skeleton uses animate-pulse
+    const skeletons = document.querySelectorAll('.animate-pulse')
+    expect(skeletons.length).toBeGreaterThan(0)
+  })
+
+  it('renders KPI cards after loading', async () => {
+    const HubAnalyticsPage = (await import('../HubAnalyticsPage')).default
+    render(<HubAnalyticsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Total Cost')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Total Jobs')).toBeInTheDocument()
+    expect(screen.getByText('Success Rate')).toBeInTheDocument()
+  })
+
+  it('renders project comparison section', async () => {
+    const HubAnalyticsPage = (await import('../HubAnalyticsPage')).default
+    render(<HubAnalyticsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Project Comparison')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Project Alpha')).toBeInTheDocument()
+  })
+
+  it('renders error state when fetch fails', async () => {
+    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      status: 500,
+    })
+
+    const HubAnalyticsPage = (await import('../HubAnalyticsPage')).default
+    render(<HubAnalyticsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/failed to load analytics/i)).toBeInTheDocument()
+    })
+  })
+
+  it('renders period selector buttons', async () => {
+    const HubAnalyticsPage = (await import('../HubAnalyticsPage')).default
+    render(<HubAnalyticsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('7d')).toBeInTheDocument()
+    })
+    expect(screen.getByText('30d')).toBeInTheDocument()
+  })
+
+  it('renders refresh button', async () => {
+    const HubAnalyticsPage = (await import('../HubAnalyticsPage')).default
+    render(<HubAnalyticsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Refresh analytics')).toBeInTheDocument()
+    })
+  })
+
+  it('changes period when a preset button is clicked', async () => {
+    const HubAnalyticsPage = (await import('../HubAnalyticsPage')).default
+    render(<HubAnalyticsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('30d')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('30d'))
+
+    await waitFor(() => {
+      // fetch should have been called again with period=30d
+      const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls
+      const has30d = calls.some(([url]: [string]) => url.includes('period=30d'))
+      expect(has30d).toBe(true)
+    })
+  })
+
+  it('renders cost data values in KPI cards', async () => {
+    const HubAnalyticsPage = (await import('../HubAnalyticsPage')).default
+    render(<HubAnalyticsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('$2.5000')).toBeInTheDocument()
+    })
+  })
+
+  it('renders "No projects registered." when projectBreakdown is empty', async () => {
+    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({ ...mockAnalyticsData, projectBreakdown: [] }),
+    })
+
+    const HubAnalyticsPage = (await import('../HubAnalyticsPage')).default
+    render(<HubAnalyticsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('No projects registered.')).toBeInTheDocument()
+    })
+  })
+})

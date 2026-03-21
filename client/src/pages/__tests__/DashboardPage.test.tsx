@@ -69,6 +69,16 @@ vi.mock('../../components/BatchImplementWizard', () => ({
     open ? <div data-testid="batch-wizard">BatchImplementWizard</div> : null,
 }))
 
+// HubTodayWidget uses useSharedWebSocket which requires the provider
+vi.mock('../../components/HubTodayWidget', () => ({
+  HubTodayWidget: () => null,
+}))
+
+// SpecrailsTechPanel may have external deps
+vi.mock('../../components/SpecrailsTechPanel', () => ({
+  SpecrailsTechPanel: () => null,
+}))
+
 describe('DashboardPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -90,7 +100,7 @@ describe('DashboardPage', () => {
 
   it('shows empty state for commands when no commands available', () => {
     render(<DashboardPage />)
-    expect(screen.getByText(/No commands found/i)).toBeInTheDocument()
+    expect(screen.getByText(/No commands installed/i)).toBeInTheDocument()
   })
 
   it('shows empty state for jobs when no jobs available', () => {
