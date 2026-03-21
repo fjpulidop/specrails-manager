@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, Activity, Layers, CheckCircle, AlertTriangle, XCircle, Clock, X, Zap } from 'lucide-react'
+import { Search, Activity, Layers, CheckCircle, AlertTriangle, XCircle, Clock, X, Zap, HeartPulse } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
-import type { HubOverviewResponse, HubProjectOverview, HubRecentJob, HubSearchResponse } from '../types'
+import type { HubOverviewResponse, HubProjectOverview, HubRecentJob, HubSearchResponse, HubHealthResponse } from '../types'
 import { STATUS_COLORS } from '../lib/dracula-colors'
 import { useHub } from '../hooks/useHub'
+import ProjectHealthGrid from '../components/ProjectHealthGrid'
 
 // ─── Aggregated Stats Bar ─────────────────────────────────────────────────────
 
@@ -302,6 +303,7 @@ function SearchResults({ results, onClear }: { results: HubSearchResponse; onCle
 export default function HubOverviewPage() {
   const { projects, setActiveProjectId } = useHub()
   const [overview, setOverview] = useState<HubOverviewResponse | null>(null)
+  const [health, setHealth] = useState<HubHealthResponse | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<HubSearchResponse | null>(null)
   const [searching, setSearching] = useState(false)
@@ -311,9 +313,15 @@ export default function HubOverviewPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/hub/overview')
-      if (res.ok) {
-        setOverview(await res.json() as HubOverviewResponse)
+      const [overviewRes, healthRes] = await Promise.all([
+        fetch('/api/hub/overview'),
+        fetch('/api/hub/health'),
+      ])
+      if (overviewRes.ok) {
+        setOverview(await overviewRes.json() as HubOverviewResponse)
+      }
+      if (healthRes.ok) {
+        setHealth(await healthRes.json() as HubHealthResponse)
       }
     } finally {
       setLoading(false)
@@ -414,6 +422,26 @@ export default function HubOverviewPage() {
                 projects={overview.projects}
                 onSwitchProject={handleSwitchProject}
               />
+            )}
+
+            {/* Project Health Grid */}
+            {!loading && health && health.projects.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <HeartPulse className="w-4 h-4 text-muted-foreground" />
+                  <h2 className="text-sm font-medium">Project Health</h2>
+                  <span className="text-xs text-muted-foreground ml-auto">
+                    {health.aggregated.greenCount} healthy · {health.aggregated.yellowCount} warning · {health.aggregated.redCount} critical
+                  </span>
+                </div>
+                <ProjectHealthGrid
+                  projects={health.projects}
+                  onSelectProject={handleSwitchProject}
+                />
+              </div>
+            )}
+            {loading && (
+              <div className="h-[120px] rounded-lg border border-border/40 bg-card/50 animate-pulse" />
             )}
 
             {/* Recent activity skeleton */}

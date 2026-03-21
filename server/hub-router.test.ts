@@ -982,4 +982,47 @@ describe('hub-router', () => {
       vi.unstubAllGlobals()
     })
   })
+
+  // ─── GET /health ──────────────────────────────────────────────────────────
+
+  describe('GET /api/hub/health', () => {
+    it('returns empty when no projects', async () => {
+      const { app } = createApp()
+      const res = await request(app).get('/api/hub/health')
+      expect(res.status).toBe(200)
+      expect(res.body.projects).toEqual([])
+      expect(res.body.aggregated.totalCount).toBe(0)
+    })
+
+    it('returns per-project health data', async () => {
+      const { app, contexts } = createApp()
+      const now = new Date()
+      const recentIso = new Date(now.getTime() - 60 * 60 * 1000).toISOString()
+      const db = initDb(':memory:')
+      db.prepare(`
+        INSERT INTO jobs (id, command, status, started_at, finished_at, total_cost_usd)
+        VALUES (?, 'implement', 'completed', ?, ?, 0.10)
+      `).run('j1', recentIso, recentIso)
+
+      contexts.set('p1', {
+        project: { id: 'p1', name: 'TestProj', slug: 'testproj', path: '/tmp', db_path: ':memory:', added_at: '', last_seen_at: '' },
+        db,
+        queueManager: {} as any,
+        chatManager: {} as any,
+        setupManager: {} as any,
+        proposalManager: {} as any,
+        broadcast: vi.fn(),
+      })
+
+      const res = await request(app).get('/api/hub/health')
+      expect(res.status).toBe(200)
+      expect(res.body.projects).toHaveLength(1)
+      expect(res.body.projects[0].projectId).toBe('p1')
+      expect(res.body.projects[0].projectName).toBe('TestProj')
+      expect(res.body.projects[0].successRate24h).toBe(1)
+      expect(res.body.projects[0].totalCost24h).toBeCloseTo(0.10)
+      expect(res.body.projects[0].healthStatus).toBe('green')
+      expect(res.body.aggregated.greenCount).toBe(1)
+    })
+  })
 })

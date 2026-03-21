@@ -105,12 +105,28 @@ const emptySearchResults: HubSearchResponse = {
   groups: [],
 }
 
+const emptyHealthResponse = { projects: [], aggregated: { totalCount: 0, greenCount: 0, yellowCount: 0, redCount: 0 } }
+
+function mockFetchWithHealth(overviewData: HubOverviewResponse = mockOverview, searchData?: HubSearchResponse) {
+  ;(global.fetch as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => {
+    if (typeof url === 'string' && url.includes('/api/hub/health')) {
+      return { ok: true, json: async () => emptyHealthResponse }
+    }
+    if (typeof url === 'string' && url.includes('/api/hub/search') && searchData) {
+      return { ok: true, json: async () => searchData }
+    }
+    return { ok: true, json: async () => overviewData }
+  })
+}
+
 describe('HubOverviewPage - extended coverage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true,
-      json: async () => mockOverview,
+    ;(global.fetch as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => {
+      if (url.includes('/api/hub/health')) {
+        return { ok: true, json: async () => ({ projects: [], aggregated: { totalCount: 0, greenCount: 0, yellowCount: 0, redCount: 0 } }) }
+      }
+      return { ok: true, json: async () => mockOverview }
     })
   })
 
@@ -191,9 +207,7 @@ describe('HubOverviewPage - extended coverage', () => {
 
   it('renders search results when query returns results', async () => {
     const user = userEvent.setup({ delay: null })
-    ;(global.fetch as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ ok: true, json: async () => mockOverview })
-      .mockResolvedValueOnce({ ok: true, json: async () => mockSearchResults })
+    mockFetchWithHealth(mockOverview, mockSearchResults)
 
     render(<HubOverviewPage />)
 
@@ -213,9 +227,7 @@ describe('HubOverviewPage - extended coverage', () => {
 
   it('renders empty search results state', async () => {
     const user = userEvent.setup({ delay: null })
-    ;(global.fetch as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ ok: true, json: async () => mockOverview })
-      .mockResolvedValueOnce({ ok: true, json: async () => emptySearchResults })
+    mockFetchWithHealth(mockOverview, emptySearchResults)
 
     render(<HubOverviewPage />)
 
@@ -234,9 +246,7 @@ describe('HubOverviewPage - extended coverage', () => {
   })
 
   it('clears search when input is changed to short query', async () => {
-    ;(global.fetch as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ ok: true, json: async () => mockOverview })
-      .mockResolvedValueOnce({ ok: true, json: async () => emptySearchResults })
+    mockFetchWithHealth(mockOverview, emptySearchResults)
 
     render(<HubOverviewPage />)
 
@@ -255,10 +265,7 @@ describe('HubOverviewPage - extended coverage', () => {
   })
 
   it('does not search when query is less than 2 characters', async () => {
-    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockOverview,
-    })
+    mockFetchWithHealth()
 
     render(<HubOverviewPage />)
 
@@ -302,13 +309,7 @@ describe('HubOverviewPage - extended coverage', () => {
   })
 
   it('shows "No activity yet" when recentJobs is empty', async () => {
-    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        ...mockOverview,
-        recentJobs: [],
-      }),
-    })
+    mockFetchWithHealth({ ...mockOverview, recentJobs: [] })
 
     render(<HubOverviewPage />)
 
@@ -324,9 +325,7 @@ describe('HubOverviewPage - SearchResults component coverage', () => {
   })
 
   it('SearchResults shows results count and triggers search fetch', async () => {
-    ;(global.fetch as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ ok: true, json: async () => mockOverview })
-      .mockResolvedValue({ ok: true, json: async () => mockSearchResults })
+    mockFetchWithHealth(mockOverview, mockSearchResults)
 
     render(<HubOverviewPage />)
 
@@ -345,9 +344,7 @@ describe('HubOverviewPage - SearchResults component coverage', () => {
   })
 
   it('SearchResults with proposals renders proposal ideas on search', async () => {
-    ;(global.fetch as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ ok: true, json: async () => mockOverview })
-      .mockResolvedValue({ ok: true, json: async () => mockSearchResults })
+    mockFetchWithHealth(mockOverview, mockSearchResults)
 
     render(<HubOverviewPage />)
 

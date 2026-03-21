@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import fs from 'fs'
 import path from 'path'
-import { getHubAnalytics, getHubTodayStats, getHubRecentJobs, searchHubContent, getHubOverview } from './hub-analytics'
+import { getHubAnalytics, getHubTodayStats, getHubRecentJobs, searchHubContent, getHubOverview, getHubHealth } from './hub-analytics'
 import { initDb } from './db'
 import type { ProjectRegistry, ProjectContext } from './project-registry'
 import type { DbInstance } from './db'
@@ -391,5 +391,162 @@ describe('getHubOverview', () => {
     ])
     const result = getHubOverview(registry)
     expect(result.projects[0].projectName).toBe('Active')
+  })
+})
+
+// ─── getHubHealth ────────────────────────────────────────────────────────────
+
+describe('getHubHealth', () => {
+  it('returns empty when no projects are registered', () => {
+    const registry = makeRegistry([])
+    const result = getHubHealth(registry)
+    expect(result.projects).toEqual([])
+    expect(result.aggregated).toEqual({ totalCount: 0, greenCount: 0, yellowCount: 0, redCount: 0 })
+  })
+
+  it('returns green when success rate >80% and recent success', () => {
+    const now = new Date()
+    const recentIso = new Date(now.getTime() - 60 * 60 * 1000).toISOString() // 1h ago
+    const db = makeProjectDb([
+      { costUsd: 0.10, status: 'completed', startedAt: recentIso },
+      { costUsd: 0.05, status: 'completed', startedAt: recentIso },
+      { costUsd: 0.02, status: 'completed', startedAt: recentIso },
+      { costUsd: 0.01, status: 'completed', startedAt: recentIso },
+      { costUsd: 0.03, status: 'completed', startedAt: recentIso },
+    ])
+    const registry = makeRegistry([{ id: 'p1', name: 'Healthy', db }])
+    const result = getHubHealth(registry)
+
+    expect(result.projects).toHaveLength(1)
+    expect(result.projects[0].healthStatus).toBe('green')
+    expect(result.projects[0].successRate24h).toBe(1)
+    expect(result.projects[0].totalCost24h).toBeCloseTo(0.21)
+    expect(result.aggregated.greenCount).toBe(1)
+  })
+
+  it('returns yellow when success rate is between 60-80%', () => {
+    const now = new Date()
+    const recentIso = new Date(now.getTime() - 60 * 60 * 1000).toISOString()
+    const db = makeProjectDb([
+      { costUsd: 0.10, status: 'completed', startedAt: recentIso },
+      { costUsd: 0.10, status: 'completed', startedAt: recentIso },
+      { costUsd: 0.10, status: 'completed', startedAt: recentIso },
+      { costUsd: 0.10, status: 'failed', startedAt: recentIso },
+    ])
+    const registry = makeRegistry([{ id: 'p1', name: 'Warning', db }])
+    const result = getHubHealth(registry)
+
+    expect(result.projects[0].healthStatus).toBe('yellow')
+    expect(result.projects[0].successRate24h).toBe(0.75)
+    expect(result.aggregated.yellowCount).toBe(1)
+  })
+
+  it('returns red when success rate <60%', () => {
+    const now = new Date()
+    const recentIso = new Date(now.getTime() - 60 * 60 * 1000).toISOString()
+    const db = makeProjectDb([
+      { costUsd: 0.10, status: 'completed', startedAt: recentIso },
+      { costUsd: 0.10, status: 'failed', startedAt: recentIso },
+      { costUsd: 0.10, status: 'failed', startedAt: recentIso },
+      { costUsd: 0.10, status: 'failed', startedAt: recentIso },
+    ])
+    const registry = makeRegistry([{ id: 'p1', name: 'Critical', db }])
+    const result = getHubHealth(registry)
+
+    expect(result.projects[0].healthStatus).toBe('red')
+    expect(result.projects[0].successRate24h).toBe(0.25)
+    expect(result.aggregated.redCount).toBe(1)
+  })
+
+  it('returns red when last success was >24h ago', () => {
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
+    const db = initDb(':memory:')
+    db.prepare(`
+      INSERT INTO jobs (id, command, status, started_at, finished_at, total_cost_usd, duration_ms)
+      VALUES (?, 'implement', 'completed', ?, ?, 0.05, 1000)
+    `).run(crypto.randomUUID(), twoDaysAgo, twoDaysAgo)
+
+    const registry = makeRegistry([{ id: 'p1', name: 'Stale', db }])
+    const result = getHubHealth(registry)
+
+    expect(result.projects[0].healthStatus).toBe('red')
+    expect(result.projects[0].lastSuccessfulJobAt).toBeTruthy()
+  })
+
+  it('returns yellow when >5 pending jobs', () => {
+    const now = new Date()
+    const recentIso = new Date(now.getTime() - 30 * 60 * 1000).toISOString()
+    const db = initDb(':memory:')
+    // Insert 10 completed recent jobs (high success rate)
+    for (let i = 0; i < 10; i++) {
+      db.prepare(`
+        INSERT INTO jobs (id, command, status, started_at, finished_at, total_cost_usd)
+        VALUES (?, 'cmd', 'completed', ?, ?, 0.01)
+      `).run(crypto.randomUUID(), recentIso, recentIso)
+    }
+    // Insert 6 queued jobs (pending)
+    for (let i = 0; i < 6; i++) {
+      db.prepare(`
+        INSERT INTO jobs (id, command, status, started_at)
+        VALUES (?, 'cmd', 'queued', ?)
+      `).run(crypto.randomUUID(), recentIso)
+    }
+    const registry = makeRegistry([{ id: 'p1', name: 'Queued', db }])
+    const result = getHubHealth(registry)
+
+    expect(result.projects[0].healthStatus).toBe('yellow')
+    expect(result.projects[0].pendingJobsCount).toBe(6)
+  })
+
+  it('sorts projects red → yellow → green', () => {
+    const now = new Date()
+    const recentIso = new Date(now.getTime() - 60 * 60 * 1000).toISOString()
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
+
+    const greenDb = makeProjectDb([
+      { costUsd: 0.01, status: 'completed', startedAt: recentIso },
+    ])
+    const yellowDb = makeProjectDb([
+      { costUsd: 0.01, status: 'completed', startedAt: recentIso },
+      { costUsd: 0.01, status: 'completed', startedAt: recentIso },
+      { costUsd: 0.01, status: 'completed', startedAt: recentIso },
+      { costUsd: 0.01, status: 'failed', startedAt: recentIso },
+    ])
+    const redDb = initDb(':memory:')
+    redDb.prepare(`
+      INSERT INTO jobs (id, command, status, started_at, finished_at, total_cost_usd, duration_ms)
+      VALUES (?, 'implement', 'completed', ?, ?, 0.01, 1000)
+    `).run(crypto.randomUUID(), twoDaysAgo, twoDaysAgo)
+
+    const registry = makeRegistry([
+      { id: 'green', name: 'Green', db: greenDb },
+      { id: 'yellow', name: 'Yellow', db: yellowDb },
+      { id: 'red', name: 'Red', db: redDb },
+    ])
+    const result = getHubHealth(registry)
+
+    expect(result.projects[0].healthStatus).toBe('red')
+    expect(result.projects[1].healthStatus).toBe('yellow')
+    expect(result.projects[2].healthStatus).toBe('green')
+  })
+
+  it('returns correct cost and pending counts', () => {
+    const now = new Date()
+    const recentIso = new Date(now.getTime() - 30 * 60 * 1000).toISOString()
+    const db = initDb(':memory:')
+    db.prepare(`
+      INSERT INTO jobs (id, command, status, started_at, finished_at, total_cost_usd)
+      VALUES (?, 'cmd', 'completed', ?, ?, 1.50)
+    `).run('j1', recentIso, recentIso)
+    db.prepare(`
+      INSERT INTO jobs (id, command, status, started_at, total_cost_usd)
+      VALUES (?, 'cmd', 'running', ?, 0.25)
+    `).run('j2', recentIso)
+
+    const registry = makeRegistry([{ id: 'p1', name: 'Test', db }])
+    const result = getHubHealth(registry)
+
+    expect(result.projects[0].totalCost24h).toBeCloseTo(1.75)
+    expect(result.projects[0].pendingJobsCount).toBe(1)
   })
 })
