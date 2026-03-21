@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.0](https://github.com/fjpulidop/specrails-hub/compare/v1.14.2...v1.15.0) (2026-03-21)
+
+
+### Features
+
+* per-project AI provider selection — Claude vs Codex (SPEA-537) ([#98](https://github.com/fjpulidop/specrails-hub/issues/98)) ([b555ca1](https://github.com/fjpulidop/specrails-hub/commit/b555ca1c81e2fe2daa882da930358edf16852bb1))
+
 ## [1.14.2](https://github.com/fjpulidop/specrails-hub/compare/v1.14.1...v1.14.2) (2026-03-21)
 
 
