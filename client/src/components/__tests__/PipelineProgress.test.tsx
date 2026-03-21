@@ -45,37 +45,28 @@ describe('PipelineProgress', () => {
   it('renders connector lines between phases', () => {
     render(<PipelineProgress phases={{}} phaseDefinitions={phaseDefinitions} />)
     // There are phaseDefinitions.length - 1 connectors (divs with h-px w-8)
-    const connectors = document.querySelectorAll('.h-px.w-8')
+    const connectors = document.querySelectorAll('.h-px.w-12')
     expect(connectors.length).toBe(phaseDefinitions.length - 1)
   })
 
   it('connector is green-tinted when preceding phase is done', () => {
     const phases: PhaseMap = { architect: 'done' }
     render(<PipelineProgress phases={phases} phaseDefinitions={phaseDefinitions} />)
-    // First connector follows architect (done) — background color is the emerald/green
-    const connectors = document.querySelectorAll('.h-px.w-8')
+    // First connector follows architect (done) — uses emerald CSS class
+    const connectors = document.querySelectorAll('.h-px.w-12')
     const firstConnector = connectors[0] as HTMLElement
-    const bg = firstConnector.style.background
-    // hsl(142 71% 45% / 0.4) — jsdom converts to rgba with green channel values
-    // Green component is dominant: check it is a non-dark color (not the idle dark background)
-    expect(bg).toBeTruthy()
-    // The done color is the green hsl(142 71% 45% / 0.4) — it should differ from idle
-    expect(bg).not.toContain('rgb(21, 31, 49)') // idle dark color
+    // Tailwind classes — check CSS class rather than computed style (jsdom doesn't process Tailwind)
+    expect(firstConnector.className).toContain('bg-emerald-500')
   })
 
-  it('connector uses dark color when both phases are explicitly idle', () => {
-    // When phases are explicitly set to 'idle', the connector is dark
-    // The logic: green if next phase !== 'idle' (includes undefined) OR current is done
-    // So to get dark connector, next phase must explicitly be 'idle'
+  it('connector uses muted color when both phases are explicitly idle', () => {
     const phases: PhaseMap = { architect: 'idle', developer: 'idle', reviewer: 'idle', ship: 'idle' }
     render(<PipelineProgress phases={phases} phaseDefinitions={phaseDefinitions} />)
-    const connectors = document.querySelectorAll('.h-px.w-8')
+    const connectors = document.querySelectorAll('.h-px.w-12')
     const firstConnector = connectors[0] as HTMLElement
-    const bg = firstConnector.style.background
-    // With developer explicitly 'idle' and architect not 'done', connector is dark
-    expect(bg).toBeTruthy()
-    // The dark connector is hsl(217 33% 17%) — not the green rgba
-    expect(bg).not.toContain('rgba(33, 196')
+    // All idle — connector should use bg-border class, not the green emerald
+    expect(firstConnector.className).toContain('bg-border')
+    expect(firstConnector.className).not.toContain('bg-emerald-500')
   })
 
   it('has correct number of phase items', () => {
