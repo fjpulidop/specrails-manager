@@ -82,6 +82,7 @@ function cliWarn(msg: string): void {
 
 export type ParsedArgs =
   | { mode: 'help' }
+  | { mode: 'version' }
   | { mode: 'status'; port: number }
   | { mode: 'jobs'; port: number }
   | { mode: 'hub'; subArgs: string[]; port: number }
@@ -103,6 +104,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
       args.splice(i, 2)
       i--
     }
+  }
+
+  if (args[0] === '--version' || args[0] === '-v') {
+    return { mode: 'version' }
   }
 
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
@@ -150,20 +155,55 @@ export function parseArgs(argv: string[]): ParsedArgs {
   return { mode: 'raw', resolved, port }
 }
 
+export function getVersion(): string {
+  for (const rel of ['../package.json', '../../package.json']) {
+    try {
+      const pkgPath = path.join(__dirname, rel)
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')) as { version?: string }
+      if (typeof pkg.version === 'string') return pkg.version
+    } catch {
+      // try next
+    }
+  }
+  return 'unknown'
+}
+
+function printVersion(): void {
+  process.stdout.write(`specrails-hub v${getVersion()}\n`)
+}
+
 function printHelp(): void {
+  const version = getVersion()
   process.stdout.write(`
-${bold('specrails-hub')} — specrails CLI bridge
+${bold(`specrails-hub v${version}`)} — specrails CLI bridge
+
+${bold('Project Required:')}
+  Every command runs in the context of a project registered for the current
+  directory. Register your project once before running any commands:
+
+    ${dim('# Register your project (run once per project):')}
+    specrails-hub hub add .
+
+    ${dim('# Then run commands from that directory:')}
+    specrails-hub implement #42
 
 ${bold('Usage:')}
   specrails-hub implement #42                Run a known specrails verb (prepends /sr:)
-  specrails-hub batch-implement #40 #41      Known verbs: ${[...KNOWN_VERBS].join(', ')}
+  specrails-hub batch-implement #40 #41      Batch implementation across issues
+  specrails-hub why                          Explain recent changes
+  specrails-hub product-backlog              View prioritized product backlog
+  specrails-hub update-product-driven-backlog  Generate new feature ideas
+  specrails-hub refactor-recommender        Find refactoring opportunities
+  specrails-hub health-check                Run codebase health check
+  specrails-hub compat-check                Check for breaking API changes
   specrails-hub "any raw prompt"             Pass a raw prompt directly to claude
   specrails-hub --status                     Print manager status and exit
   specrails-hub --jobs                       Print recent job history and exit
-  specrails-hub start|stop|add|list         Manage the hub (shorthand, no 'hub' prefix needed)
+  specrails-hub start|stop|add|remove|list  Manage the hub (shorthand, no 'hub' prefix)
   specrails-hub hub <subcommand>             Same, with explicit 'hub' prefix
   specrails-hub --port <n>                   Override default port (${DEFAULT_PORT})
-  specrails-hub --help                       Show this help text
+  specrails-hub --version, -v               Print version and exit
+  specrails-hub --help, -h                  Show this help text
 
 ${bold('Execution paths:')}
   Manager running → POST /api/spawn + stream logs via WebSocket
@@ -1106,6 +1146,11 @@ ${bold('Usage:')}
 async function main(): Promise<void> {
   const argv = process.argv.slice(2)
   const parsed = parseArgs(argv)
+
+  if (parsed.mode === 'version') {
+    printVersion()
+    process.exit(0)
+  }
 
   if (parsed.mode === 'help') {
     printHelp()

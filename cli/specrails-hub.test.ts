@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseArgs, formatDuration, formatTokens } from './specrails-hub'
+import { parseArgs, formatDuration, formatTokens, getVersion } from './specrails-hub'
 
 describe('parseArgs', () => {
   it('returns help mode with no args', () => {
@@ -9,6 +9,11 @@ describe('parseArgs', () => {
   it('returns help mode with --help flag', () => {
     expect(parseArgs(['--help'])).toEqual({ mode: 'help' })
     expect(parseArgs(['-h'])).toEqual({ mode: 'help' })
+  })
+
+  it('returns version mode with --version flag', () => {
+    expect(parseArgs(['--version'])).toEqual({ mode: 'version' })
+    expect(parseArgs(['-v'])).toEqual({ mode: 'version' })
   })
 
   it('returns status mode', () => {
@@ -95,5 +100,12 @@ describe('formatTokens', () => {
     expect(formatTokens(1000)).toBe('1 000')
     expect(formatTokens(1234567)).toBe('1 234 567')
     expect(formatTokens(42)).toBe('42')
+  })
+})
+
+describe('getVersion', () => {
+  it('returns a semver-like version string from package.json', () => {
+    const version = getVersion()
+    expect(version).toMatch(/^\d+\.\d+\.\d+/)
   })
 })

@@ -1,6 +1,6 @@
 import { spawn, ChildProcess } from 'child_process'
 import { createInterface } from 'readline'
-import { existsSync, readdirSync } from 'fs'
+import { existsSync, readdirSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import treeKill from 'tree-kill'
 import type { WsMessage } from './types'
@@ -271,6 +271,19 @@ export class SetupManager {
     }
 
     this._initCheckpoints(projectId)
+
+    // Pre-create the directory structure that /setup will write to.
+    // Claude Code's Write tool does not create parent directories automatically —
+    // if a target directory doesn't exist the write fails and Claude reports a
+    // misleading "write permissions aren't enabled" error.  Creating the dirs
+    // here ensures setup runs transparently without any user intervention.
+    try {
+      mkdirSync(join(projectPath, '.claude', 'agents', 'personas'), { recursive: true })
+      mkdirSync(join(projectPath, '.claude', 'commands', 'sr'), { recursive: true })
+      mkdirSync(join(projectPath, '.claude', 'rules'), { recursive: true })
+    } catch (err) {
+      console.warn(`[SetupManager] Failed to pre-create setup directories: ${err}`)
+    }
 
     const args = [
       '-p', '/setup',
