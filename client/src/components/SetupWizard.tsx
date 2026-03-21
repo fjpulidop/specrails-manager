@@ -326,7 +326,7 @@ export function SetupWizard({ project, onComplete: rawOnComplete, onSkip: rawOnS
       try {
         const res = await fetch(`/api/projects/${project.id}/setup/checkpoints`)
         if (!res.ok) return
-        const data = await res.json() as { checkpoints: CheckpointState[]; isInstalling: boolean; isSettingUp: boolean; savedSessionId: string | null }
+        const data = await res.json() as { checkpoints: CheckpointState[]; isInstalling: boolean; isSettingUp: boolean; savedSessionId: string | null; logLines?: string[] }
 
         // Restore session ID from server if not in memory (e.g. server restart)
         if (data.savedSessionId && !sessionIdRef.current) {
@@ -336,6 +336,13 @@ export function SetupWizard({ project, onComplete: rawOnComplete, onSkip: rawOnS
         // Update checkpoints from server
         if (data.checkpoints) {
           setCheckpoints(data.checkpoints)
+        }
+
+        // Restore install log lines — use server buffer if it has more lines than
+        // the client cache (server accumulates all lines; client may have missed
+        // lines received while the tab was inactive)
+        if (data.logLines && data.logLines.length > 0) {
+          setLogLines((prev) => data.logLines!.length > prev.length ? data.logLines! : prev)
         }
 
         // If we were on 'installing' but install finished, advance to setup
