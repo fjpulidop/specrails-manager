@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.16.0](https://github.com/fjpulidop/specrails-hub/compare/v1.15.0...v1.16.0) (2026-03-21)
+
+
+### Features
+
+* job failure pattern detection — surface recurring failures on dashboard (SPEA-560) ([#100](https://github.com/fjpulidop/specrails-hub/issues/100)) ([df16669](https://github.com/fjpulidop/specrails-hub/commit/df166695d04dc6a9b91eb359d40ef3ad89a52a17))
+* job templates & runbooks — save and reuse command sequences (SPEA-559) ([#101](https://github.com/fjpulidop/specrails-hub/issues/101)) ([5870326](https://github.com/fjpulidop/specrails-hub/commit/5870326e9d722a308c5c0924149904bb09c72c2a))
+* outbound webhooks — notify external tools on hub events (SPEA-558) ([#103](https://github.com/fjpulidop/specrails-hub/issues/103)) ([68e1c60](https://github.com/fjpulidop/specrails-hub/commit/68e1c60c69bdf515078d5cbb3b4b480020845041))
+
 ## [1.15.0](https://github.com/fjpulidop/specrails-hub/compare/v1.14.2...v1.15.0) (2026-03-21)
 
 
