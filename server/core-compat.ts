@@ -15,14 +15,22 @@ const HUB_KNOWN_COMMANDS = new Set([
   'compat-check',
 ])
 
+// v1.0: cli.initArgs / cli.updateArgs (flat)
+// v2.0: cli.claude / cli.codex (per-provider objects) + specrailsDir
 interface IntegrationContract {
   schemaVersion: string
   coreVersion: string
   minimumHubVersion: string
+  provider?: string
   cli: {
-    initArgs: string[]
-    updateArgs: string[]
+    // v1.0 fields
+    initArgs?: string[]
+    updateArgs?: string[]
+    // v2.0 fields
+    claude?: { binary: string; initArgs: string[] }
+    codex?: { binary: string; initArgs: string[] }
   }
+  specrailsDir?: { claude: string; codex: string }
   checkpoints: string[]
   commands: string[]
 }
@@ -56,6 +64,34 @@ export async function findCoreContract(): Promise<string | null> {
   } catch { /* npm not available or failed */ }
 
   return null
+}
+
+// ─── CLI detection ────────────────────────────────────────────────────────────
+
+export type CLIProvider = 'claude' | 'codex'
+
+/**
+ * Synchronously detect which AI CLI is available in the user's PATH.
+ * Prefers Claude Code if both are present.
+ * Returns null if neither is found.
+ */
+export function detectCLISync(): CLIProvider | null {
+  try {
+    execSync('which claude', { stdio: 'ignore' })
+    return 'claude'
+  } catch { /* not found */ }
+  try {
+    execSync('which codex', { stdio: 'ignore' })
+    return 'codex'
+  } catch { /* not found */ }
+  return null
+}
+
+/**
+ * Async wrapper around detectCLISync for callers that prefer Promise-based API.
+ */
+export async function detectCLI(): Promise<CLIProvider | null> {
+  return detectCLISync()
 }
 
 function readHubVersion(): string {

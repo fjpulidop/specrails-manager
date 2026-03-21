@@ -6,7 +6,7 @@ import fs from 'fs'
 // Mock child_process before importing the module under test
 vi.mock('child_process', () => ({ execSync: vi.fn() }))
 
-import { checkCoreCompat, findCoreContract } from './core-compat'
+import { checkCoreCompat, findCoreContract, detectCLI, detectCLISync } from './core-compat'
 import { execSync } from 'child_process'
 
 // Minimal valid contract matching hub constants
@@ -151,6 +151,57 @@ describe('checkCoreCompat', () => {
     const result = await checkCoreCompat()
 
     expect(result.hubVersion).toMatch(/^\d+\.\d+\.\d+$/)
+  })
+})
+
+describe('detectCLISync', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('returns claude when claude binary is found', () => {
+    vi.mocked(execSync).mockImplementation((cmd: any) => {
+      if (String(cmd).includes('claude')) return '' as any
+      throw new Error('not found')
+    })
+    expect(detectCLISync()).toBe('claude')
+  })
+
+  it('returns codex when only codex binary is found', () => {
+    vi.mocked(execSync).mockImplementation((cmd: any) => {
+      if (String(cmd).includes('codex')) return '' as any
+      throw new Error('not found')
+    })
+    expect(detectCLISync()).toBe('codex')
+  })
+
+  it('prefers claude over codex when both are present', () => {
+    vi.mocked(execSync).mockReturnValue('' as any)
+    expect(detectCLISync()).toBe('claude')
+  })
+
+  it('returns null when neither CLI is found', () => {
+    vi.mocked(execSync).mockImplementation(() => { throw new Error('not found') })
+    expect(detectCLISync()).toBeNull()
+  })
+})
+
+describe('detectCLI', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('resolves to claude when claude binary is found', async () => {
+    vi.mocked(execSync).mockImplementation((cmd: any) => {
+      if (String(cmd).includes('claude')) return '' as any
+      throw new Error('not found')
+    })
+    await expect(detectCLI()).resolves.toBe('claude')
+  })
+
+  it('resolves to null when no CLI is found', async () => {
+    vi.mocked(execSync).mockImplementation(() => { throw new Error('not found') })
+    await expect(detectCLI()).resolves.toBeNull()
   })
 })
 
