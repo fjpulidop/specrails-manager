@@ -20,7 +20,7 @@ import { resolveCommand } from './command-resolver'
 import { createHooksRouter, getPhaseStates } from './hooks'
 import { getConfig, fetchIssues } from './config'
 import { getAnalytics, getTrends } from './analytics'
-import type { ChatConversationRow, TrendsPeriod, JobTemplate } from './types'
+import type { ChatConversationRow, TrendsPeriod, JobTemplate, JobRow } from './types'
 import { readChanges } from './changes-reader'
 import { getProjectMetrics } from './metrics'
 
@@ -181,6 +181,48 @@ export function createProjectRouter(registry: ProjectRegistry): Router {
     res.json(result)
   })
 
+  // ─── CSV helper ──────────────────────────────────────────────────────────────
+  const toCsv = (headers: string[], rows: Record<string, unknown>[]): string => {
+    const escape = (v: unknown) => {
+      const s = v == null ? '' : String(v)
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const lines = [headers.join(',')]
+    for (const row of rows) {
+      lines.push(headers.map(h => escape(row[h])).join(','))
+    }
+    return lines.join('\n')
+  }
+
+  // ─── Jobs export (must be before /:projectId/jobs/:id) ─────────────────────
+  router.get('/:projectId/jobs/export', (req: Request, res: Response) => {
+    const format = (req.query.format as string) || 'json'
+    if (format !== 'json' && format !== 'csv') {
+      res.status(400).json({ error: 'Invalid format. Must be json or csv' })
+      return
+    }
+    const from = req.query.from as string | undefined
+    const to = req.query.to as string | undefined
+    const { db } = ctx(req)
+    const conditions: string[] = []
+    const params: unknown[] = []
+    if (from) { conditions.push('started_at >= ?'); params.push(from) }
+    if (to) { conditions.push('started_at <= ?'); params.push(to) }
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+    const jobs = db
+      .prepare(`SELECT * FROM jobs ${where} ORDER BY started_at DESC LIMIT 10000`)
+      .all(...params) as JobRow[]
+    if (format === 'csv') {
+      const headers = ['id', 'command', 'status', 'started_at', 'finished_at', 'duration_ms', 'tokens_in', 'tokens_out', 'tokens_cache_read', 'total_cost_usd', 'model']
+      const csv = toCsv(headers, jobs as unknown as Record<string, unknown>[])
+      res.setHeader('Content-Type', 'text/csv')
+      res.setHeader('Content-Disposition', 'attachment; filename="jobs-export.csv"')
+      res.send(csv)
+    } else {
+      res.json({ jobs })
+    }
+  })
+
   router.get('/:projectId/jobs/:id', (req: Request, res: Response) => {
     const { db, queueManager } = ctx(req)
     const job = getJob(db, req.params.id as string)
@@ -241,6 +283,42 @@ export function createProjectRouter(registry: ProjectRegistry): Router {
       res.json(getAnalytics(ctx(req).db, { period: period as AnalyticsOpts['period'], from, to }))
     } catch (err) {
       console.error('[project-router] analytics error:', err)
+      res.status(500).json({ error: 'Failed to compute analytics' })
+    }
+  })
+
+  // ─── Analytics export ────────────────────────────────────────────────────────
+  router.get('/:projectId/analytics/export', (req: Request, res: Response) => {
+    const format = (req.query.format as string) || 'json'
+    if (format !== 'json' && format !== 'csv') {
+      res.status(400).json({ error: 'Invalid format. Must be json or csv' })
+      return
+    }
+    const period = (req.query.period as string) || '7d'
+    const from = req.query.from as string | undefined
+    const to = req.query.to as string | undefined
+    const validPeriods = ['7d', '30d', '90d', 'all', 'custom']
+    if (!validPeriods.includes(period)) {
+      res.status(400).json({ error: 'Invalid period. Must be one of: 7d, 30d, 90d, all, custom' })
+      return
+    }
+    if (period === 'custom' && (!from || !to)) {
+      res.status(400).json({ error: 'from and to are required for custom period' })
+      return
+    }
+    try {
+      const analytics = getAnalytics(ctx(req).db, { period: period as AnalyticsOpts['period'], from, to })
+      if (format === 'csv') {
+        const headers = ['command', 'totalRuns', 'successRate', 'avgCostUsd', 'avgDurationMs', 'totalCostUsd']
+        const csv = toCsv(headers, analytics.commandPerformance as unknown as Record<string, unknown>[])
+        res.setHeader('Content-Type', 'text/csv')
+        res.setHeader('Content-Disposition', 'attachment; filename="analytics-export.csv"')
+        res.send(csv)
+      } else {
+        res.json(analytics)
+      }
+    } catch (err) {
+      console.error('[project-router] analytics export error:', err)
       res.status(500).json({ error: 'Failed to compute analytics' })
     }
   })

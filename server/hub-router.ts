@@ -165,6 +165,36 @@ export function createHubRouter(
     res.json(result)
   })
 
+  // GET /api/hub/export — export hub overview as JSON or CSV
+  router.get('/export', (req, res) => {
+    const format = (req.query.format as string) || 'json'
+    if (format !== 'json' && format !== 'csv') {
+      res.status(400).json({ error: 'Invalid format. Must be json or csv' })
+      return
+    }
+    const toCsv = (headers: string[], rows: Record<string, unknown>[]): string => {
+      const escape = (v: unknown) => {
+        const s = v == null ? '' : String(v)
+        return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
+      }
+      const lines = [headers.join(',')]
+      for (const row of rows) {
+        lines.push(headers.map(h => escape(row[h])).join(','))
+      }
+      return lines.join('\n')
+    }
+    const overview = getHubOverview(registry)
+    if (format === 'csv') {
+      const headers = ['projectName', 'healthScore', 'activeJobs', 'jobsToday', 'lastRunAt', 'lastRunStatus', 'coveragePct']
+      const csv = toCsv(headers, overview.projects as unknown as Record<string, unknown>[])
+      res.setHeader('Content-Type', 'text/csv')
+      res.setHeader('Content-Disposition', 'attachment; filename="hub-export.csv"')
+      res.send(csv)
+    } else {
+      res.json(overview)
+    }
+  })
+
   // GET /api/hub/search?q= — search across all project jobs, proposals, chat messages
   router.get('/search', (req, res) => {
     const query = ((req.query.q as string) ?? '').trim()

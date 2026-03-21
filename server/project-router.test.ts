@@ -1320,4 +1320,130 @@ describe('project-router', () => {
       expect(res.status).toBe(400)
     })
   })
+
+  // ─── Jobs export ─────────────────────────────────────────────────────────────
+
+  describe('GET /:projectId/jobs/export', () => {
+    it('returns JSON by default', async () => {
+      db.prepare(
+        "INSERT INTO jobs (id, command, started_at, status) VALUES ('j-exp-1', 'sr:implement', '2025-01-01T10:00:00.000Z', 'completed')"
+      ).run()
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/jobs/export')
+      expect(res.status).toBe(200)
+      expect(res.body.jobs).toBeInstanceOf(Array)
+      expect(res.body.jobs.length).toBe(1)
+      expect(res.body.jobs[0].id).toBe('j-exp-1')
+    })
+
+    it('returns CSV when format=csv', async () => {
+      db.prepare(
+        "INSERT INTO jobs (id, command, started_at, status) VALUES ('j-csv-1', 'sr:implement', '2025-01-01T10:00:00.000Z', 'completed')"
+      ).run()
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/jobs/export?format=csv')
+      expect(res.status).toBe(200)
+      expect(res.headers['content-type']).toContain('text/csv')
+      expect(res.headers['content-disposition']).toContain('jobs-export.csv')
+      const lines = res.text.split('\n')
+      expect(lines[0]).toContain('id')
+      expect(lines[0]).toContain('command')
+      expect(lines[1]).toContain('j-csv-1')
+    })
+
+    it('returns 400 for invalid format', async () => {
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/jobs/export?format=xml')
+      expect(res.status).toBe(400)
+      expect(res.body.error).toContain('Invalid format')
+    })
+
+    it('filters by date range', async () => {
+      db.prepare(
+        "INSERT INTO jobs (id, command, started_at, status) VALUES ('j-old', 'sr:implement', '2024-01-01T10:00:00.000Z', 'completed')"
+      ).run()
+      db.prepare(
+        "INSERT INTO jobs (id, command, started_at, status) VALUES ('j-new', 'sr:implement', '2025-06-01T10:00:00.000Z', 'completed')"
+      ).run()
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/jobs/export?from=2025-01-01&to=2025-12-31')
+      expect(res.status).toBe(200)
+      expect(res.body.jobs.length).toBe(1)
+      expect(res.body.jobs[0].id).toBe('j-new')
+    })
+
+    it('returns empty array when no jobs match', async () => {
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/jobs/export')
+      expect(res.status).toBe(200)
+      expect(res.body.jobs).toEqual([])
+    })
+
+    it('escapes CSV values with commas and quotes', async () => {
+      db.prepare(
+        "INSERT INTO jobs (id, command, started_at, status) VALUES ('j-esc', 'sr:implement \"hello, world\"', '2025-01-01T10:00:00.000Z', 'completed')"
+      ).run()
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/jobs/export?format=csv')
+      expect(res.status).toBe(200)
+      // The command contains both comma and quote — should be escaped
+      expect(res.text).toContain('""hello')
+    })
+  })
+
+  // ─── Analytics export ────────────────────────────────────────────────────────
+
+  describe('GET /:projectId/analytics/export', () => {
+    it('returns JSON analytics by default', async () => {
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/analytics/export')
+      expect(res.status).toBe(200)
+      expect(res.body).toHaveProperty('kpi')
+      expect(res.body).toHaveProperty('commandPerformance')
+    })
+
+    it('returns CSV analytics when format=csv', async () => {
+      db.prepare(
+        "INSERT INTO jobs (id, command, started_at, finished_at, status, total_cost_usd, duration_ms) VALUES ('j-a1', 'sr:implement', '2025-01-01T10:00:00.000Z', '2025-01-01T10:05:00.000Z', 'completed', 0.05, 300000)"
+      ).run()
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/analytics/export?format=csv&period=all')
+      expect(res.status).toBe(200)
+      expect(res.headers['content-type']).toContain('text/csv')
+      expect(res.headers['content-disposition']).toContain('analytics-export.csv')
+      const lines = res.text.split('\n')
+      expect(lines[0]).toContain('command')
+      expect(lines[0]).toContain('totalRuns')
+    })
+
+    it('returns 400 for invalid format', async () => {
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/analytics/export?format=xml')
+      expect(res.status).toBe(400)
+    })
+
+    it('returns 400 for invalid period', async () => {
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/analytics/export?period=invalid')
+      expect(res.status).toBe(400)
+    })
+
+    it('returns 400 for custom period without from/to', async () => {
+      const ctx = makeContext(db)
+      const { app } = createApp(new Map([['proj-1', ctx]]))
+      const res = await request(app).get('/api/projects/proj-1/analytics/export?period=custom')
+      expect(res.status).toBe(400)
+      expect(res.body.error).toContain('from and to are required')
+    })
+  })
 })
