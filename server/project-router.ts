@@ -602,7 +602,7 @@ export function createProjectRouter(registry: ProjectRegistry): Router {
       res.status(409).json({ error: 'Setup already in progress' }); return
     }
     res.status(202).json({ ok: true })
-    setupManager.startSetup(project.id, project.path)
+    setupManager.startSetup(project.id, project.path, project.provider)
   })
 
   router.post('/:projectId/setup/message', (req: Request, res: Response) => {
@@ -618,7 +618,7 @@ export function createProjectRouter(registry: ProjectRegistry): Router {
       res.status(409).json({ error: 'Setup already in progress' }); return
     }
     res.status(202).json({ ok: true })
-    setupManager.resumeSetup(project.id, project.path, sessionId, message.trim())
+    setupManager.resumeSetup(project.id, project.path, sessionId, message.trim(), project.provider)
   })
 
   router.get('/:projectId/setup/checkpoints', (req: Request, res: Response) => {
