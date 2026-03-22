@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.1](https://github.com/fjpulidop/specrails-hub/compare/v1.20.0...v1.20.1) (2026-03-22)
+
+
+### Bug Fixes
+
+* validate stored section IDs to prevent stale localStorage hiding Rails section (SPEA-617) ([#132](https://github.com/fjpulidop/specrails-hub/issues/132)) ([5f846e1](https://github.com/fjpulidop/specrails-hub/commit/5f846e1aa27139554c89eda02b37d942082c3ab5))
+
 ## [1.20.0](https://github.com/fjpulidop/specrails-hub/compare/v1.19.2...v1.20.0) (2026-03-22)
 
 
