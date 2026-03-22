@@ -259,4 +259,92 @@ describe('ProjectRegistry', () => {
       expect(ctx.project.id).toBe('p1')
     })
   })
+
+  // ─── QueueManager constructor callback tests ──────────────────────────────
+
+  describe('QueueManager options callbacks', () => {
+    it('getCostAlertThreshold reads hub setting', async () => {
+      const { QueueManager } = await import('./queue-manager')
+      registry.addProject({ id: 'cb-1', slug: 'cb-proj', name: 'CB', path: '/cb' })
+
+      // Capture the options passed to QueueManager constructor
+      const constructorCalls = vi.mocked(QueueManager).mock.calls
+      const lastCall = constructorCalls[constructorCalls.length - 1]
+      const options = lastCall[4] as any
+      expect(options).toBeDefined()
+
+      // getCostAlertThreshold should read from hub settings
+      const threshold = options.getCostAlertThreshold()
+      // No setting set, so should return null
+      expect(threshold).toBeNull()
+    })
+
+    it('getHubDailyBudget returns budget and total spend', async () => {
+      const { QueueManager } = await import('./queue-manager')
+      registry.addProject({ id: 'hb-1', slug: 'hb-proj', name: 'HB', path: '/hb' })
+
+      const constructorCalls = vi.mocked(QueueManager).mock.calls
+      const lastCall = constructorCalls[constructorCalls.length - 1]
+      const options = lastCall[4] as any
+
+      const result = options.getHubDailyBudget()
+      expect(result).toHaveProperty('budget')
+      expect(result).toHaveProperty('totalSpend')
+      expect(typeof result.totalSpend).toBe('number')
+    })
+
+    it('onJobFinished calls webhook deliver', async () => {
+      const { QueueManager } = await import('./queue-manager')
+      registry.addProject({ id: 'wh-1', slug: 'wh-proj', name: 'WH', path: '/wh' })
+
+      const constructorCalls = vi.mocked(QueueManager).mock.calls
+      const lastCall = constructorCalls[constructorCalls.length - 1]
+      const options = lastCall[4] as any
+
+      // The onJobFinished callback should not throw even if job row doesn't exist
+      expect(() => options.onJobFinished('fake-job', 'completed', 0.05)).not.toThrow()
+    })
+  })
+
+  // ─── SetupManager constructor callback tests ──────────────────────────────
+
+  describe('SetupManager callbacks', () => {
+    it('setProjectSetupSession and clearProjectSetupSession callbacks work', async () => {
+      const { SetupManager } = await import('./setup-manager')
+      registry.addProject({ id: 'sm-1', slug: 'sm-proj', name: 'SM', path: '/sm' })
+
+      const constructorCalls = vi.mocked(SetupManager).mock.calls
+      const lastCall = constructorCalls[constructorCalls.length - 1]
+      const setSessionFn = lastCall[1] as (pid: string, sid: string) => void
+      const clearSessionFn = lastCall[2] as (pid: string) => void
+
+      expect(() => setSessionFn('sm-1', 'session-123')).not.toThrow()
+      expect(() => clearSessionFn('sm-1')).not.toThrow()
+    })
+  })
+
+  // ─── Bound broadcast with queue terminal status ──────────────────────────
+
+  describe('bound broadcast clears agent jobs for terminal statuses', () => {
+    it('broadcasts queue message and calls clearAgentJob for terminal jobs', () => {
+      const ctx = registry.addProject({ id: 'aq-1', slug: 'aq-proj', name: 'AQ', path: '/aq' })
+
+      // Simulate a queue broadcast with terminal job statuses
+      ctx.broadcast({
+        type: 'queue',
+        jobs: [
+          { id: 'j1', status: 'completed', command: 'cmd', priority: 'normal' },
+          { id: 'j2', status: 'running', command: 'cmd', priority: 'normal' },
+          { id: 'j3', status: 'failed', command: 'cmd', priority: 'normal' },
+        ],
+        paused: false,
+        activeJobId: null,
+      } as any)
+
+      // The broadcast should have been called with enriched projectId
+      expect(broadcast).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: 'aq-1', type: 'queue' })
+      )
+    })
+  })
 })

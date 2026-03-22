@@ -871,4 +871,421 @@ describe('QueueManager', () => {
       expect(runningRow?.priority).toBe('normal')
     })
   })
+
+  // ─── DB-backed job completion with cost data ─────────────────────────────────
+
+  describe('DB-backed job completion', () => {
+    it('writes finish data and token usage to DB on completed job', async () => {
+      vi.mocked(mockExecSync).mockReturnValue(Buffer.from('/usr/bin/claude'))
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+      vi.mocked(mockUuidV4).mockReturnValue('db-job-1' as any)
+
+      const db = initDb(':memory:')
+      const qmWithDb = new QueueManager(broadcast, db)
+      qmWithDb.enqueue('/implement')
+
+      // Simulate stdout result event with cost data
+      const resultEvent = JSON.stringify({
+        type: 'result',
+        usage: { input_tokens: 100, output_tokens: 200, cache_read_input_tokens: 50, cache_creation_input_tokens: 10 },
+        total_cost_usd: 0.05,
+        num_turns: 3,
+        model: 'claude-sonnet-4-5',
+        duration_ms: 5000,
+        api_duration_ms: 3000,
+        session_id: 'sess-123',
+      })
+      child.stdout!.push(resultEvent + '\n')
+
+      await new Promise((r) => setTimeout(r, 50))
+      child.emit('close', 0)
+      await new Promise((r) => setTimeout(r, 50))
+
+      const row = db.prepare('SELECT * FROM jobs WHERE id = ?').get('db-job-1') as any
+      expect(row.status).toBe('completed')
+      expect(row.total_cost_usd).toBe(0.05)
+      expect(row.tokens_in).toBe(100)
+      expect(row.tokens_out).toBe(200)
+      expect(row.model).toBe('claude-sonnet-4-5')
+    })
+
+    it('emits cost_alert when job cost exceeds hub threshold', async () => {
+      vi.mocked(mockExecSync).mockReturnValue(Buffer.from('/usr/bin/claude'))
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+      vi.mocked(mockUuidV4).mockReturnValue('alert-job' as any)
+
+      const db = initDb(':memory:')
+      const getCostAlertThreshold = vi.fn(() => 0.01)
+      const qmWithDb = new QueueManager(broadcast, db, [], undefined, { getCostAlertThreshold })
+      qmWithDb.enqueue('/implement')
+
+      const resultEvent = JSON.stringify({ type: 'result', total_cost_usd: 0.05, usage: {} })
+      child.stdout!.push(resultEvent + '\n')
+      await new Promise((r) => setTimeout(r, 50))
+      child.emit('close', 0)
+      await new Promise((r) => setTimeout(r, 50))
+
+      const alertCalls = broadcast.mock.calls.filter(
+        (args: unknown[]) => (args[0] as WsMessage).type === 'cost_alert'
+      )
+      expect(alertCalls.length).toBeGreaterThan(0)
+    })
+
+    it('pauses queue when daily budget is exceeded', async () => {
+      vi.mocked(mockExecSync).mockReturnValue(Buffer.from('/usr/bin/claude'))
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+      vi.mocked(mockUuidV4).mockReturnValue('budget-job' as any)
+
+      const db = initDb(':memory:')
+      // Set a daily budget
+      db.prepare(`INSERT OR REPLACE INTO queue_state (key, value) VALUES ('config.daily_budget_usd', '0.01')`).run()
+      const qmWithDb = new QueueManager(broadcast, db)
+      qmWithDb.enqueue('/implement')
+
+      const resultEvent = JSON.stringify({ type: 'result', total_cost_usd: 0.05, usage: {} })
+      child.stdout!.push(resultEvent + '\n')
+      await new Promise((r) => setTimeout(r, 50))
+      child.emit('close', 0)
+      await new Promise((r) => setTimeout(r, 50))
+
+      expect(qmWithDb.isPaused()).toBe(true)
+      const budgetCalls = broadcast.mock.calls.filter(
+        (args: unknown[]) => (args[0] as WsMessage).type === 'daily_budget_exceeded'
+      )
+      expect(budgetCalls.length).toBeGreaterThan(0)
+    })
+
+    it('pauses queue when hub daily budget is exceeded', async () => {
+      vi.mocked(mockExecSync).mockReturnValue(Buffer.from('/usr/bin/claude'))
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+      vi.mocked(mockUuidV4).mockReturnValue('hub-budget-job' as any)
+
+      const db = initDb(':memory:')
+      const getHubDailyBudget = vi.fn(() => ({ budget: 0.01, totalSpend: 0.05 }))
+      const qmWithDb = new QueueManager(broadcast, db, [], undefined, { getHubDailyBudget })
+      qmWithDb.enqueue('/implement')
+
+      const resultEvent = JSON.stringify({ type: 'result', total_cost_usd: 0.05, usage: {} })
+      child.stdout!.push(resultEvent + '\n')
+      await new Promise((r) => setTimeout(r, 50))
+      child.emit('close', 0)
+      await new Promise((r) => setTimeout(r, 50))
+
+      expect(qmWithDb.isPaused()).toBe(true)
+      const hubBudgetCalls = broadcast.mock.calls.filter(
+        (args: unknown[]) => (args[0] as WsMessage).type === 'hub_daily_budget_exceeded'
+      )
+      expect(hubBudgetCalls.length).toBeGreaterThan(0)
+    })
+
+    it('emits cost_alert for per-project cost threshold', async () => {
+      vi.mocked(mockExecSync).mockReturnValue(Buffer.from('/usr/bin/claude'))
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+      vi.mocked(mockUuidV4).mockReturnValue('proj-threshold-job' as any)
+
+      const db = initDb(':memory:')
+      db.prepare(`INSERT OR REPLACE INTO queue_state (key, value) VALUES ('config.job_cost_threshold_usd', '0.01')`).run()
+      const qmWithDb = new QueueManager(broadcast, db)
+      qmWithDb.enqueue('/implement')
+
+      const resultEvent = JSON.stringify({ type: 'result', total_cost_usd: 0.05, usage: {} })
+      child.stdout!.push(resultEvent + '\n')
+      await new Promise((r) => setTimeout(r, 50))
+      child.emit('close', 0)
+      await new Promise((r) => setTimeout(r, 50))
+
+      const alertCalls = broadcast.mock.calls.filter(
+        (args: unknown[]) => (args[0] as WsMessage).type === 'cost_alert'
+      )
+      expect(alertCalls.length).toBeGreaterThan(0)
+    })
+  })
+
+  // ─── onJobFinished callback ───────────────────────────────────────────────
+
+  describe('onJobFinished callback', () => {
+    it('calls onJobFinished when job completes', async () => {
+      vi.mocked(mockExecSync).mockReturnValue(Buffer.from('/usr/bin/claude'))
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+      vi.mocked(mockUuidV4).mockReturnValue('callback-job' as any)
+
+      const onJobFinished = vi.fn()
+      const qmWithCallback = new QueueManager(broadcast, undefined, [], undefined, { onJobFinished })
+      qmWithCallback.enqueue('/implement')
+
+      child.emit('close', 0)
+      await new Promise((r) => setTimeout(r, 50))
+
+      expect(onJobFinished).toHaveBeenCalledWith('callback-job', 'completed', undefined)
+    })
+
+    it('calls onJobFinished when job fails', async () => {
+      vi.mocked(mockExecSync).mockReturnValue(Buffer.from('/usr/bin/claude'))
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+      vi.mocked(mockUuidV4).mockReturnValue('fail-cb-job' as any)
+
+      const onJobFinished = vi.fn()
+      const qmWithCallback = new QueueManager(broadcast, undefined, [], undefined, { onJobFinished })
+      qmWithCallback.enqueue('/implement')
+
+      child.emit('close', 1)
+      await new Promise((r) => setTimeout(r, 50))
+
+      expect(onJobFinished).toHaveBeenCalledWith('fail-cb-job', 'failed', undefined)
+    })
+
+    it('does not call onJobFinished for canceled jobs', async () => {
+      vi.mocked(mockExecSync).mockReturnValue(Buffer.from('/usr/bin/claude'))
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+      vi.mocked(mockUuidV4).mockReturnValue('cancel-cb-job' as any)
+
+      const onJobFinished = vi.fn()
+      const qmWithCallback = new QueueManager(broadcast, undefined, [], undefined, { onJobFinished })
+      qmWithCallback.enqueue('/implement')
+
+      qmWithCallback.cancel('cancel-cb-job')
+      child.emit('close', 1)
+      await new Promise((r) => setTimeout(r, 50))
+
+      expect(onJobFinished).not.toHaveBeenCalled()
+    })
+
+    it('passes cost from DB when available', async () => {
+      vi.mocked(mockExecSync).mockReturnValue(Buffer.from('/usr/bin/claude'))
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+      vi.mocked(mockUuidV4).mockReturnValue('cost-cb-job' as any)
+
+      const db = initDb(':memory:')
+      const onJobFinished = vi.fn()
+      const qmWithCallback = new QueueManager(broadcast, db, [], undefined, { onJobFinished })
+      qmWithCallback.enqueue('/implement')
+
+      const resultEvent = JSON.stringify({ type: 'result', total_cost_usd: 0.1, usage: {} })
+      child.stdout!.push(resultEvent + '\n')
+      await new Promise((r) => setTimeout(r, 50))
+      child.emit('close', 0)
+      await new Promise((r) => setTimeout(r, 50))
+
+      expect(onJobFinished).toHaveBeenCalledWith('cost-cb-job', 'completed', expect.any(Number))
+    })
+  })
+
+  // ─── Codex provider ──────────────────────────────────────────────────────────
+
+  describe('codex provider', () => {
+    it('uses codex binary when provider is codex', () => {
+      vi.mocked(mockExecSync).mockReturnValue(Buffer.from('/usr/bin/codex'))
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+      vi.mocked(mockUuidV4).mockReturnValue('codex-job' as any)
+
+      const qmCodex = new QueueManager(broadcast, undefined, [], undefined, { provider: 'codex' })
+      qmCodex.enqueue('/implement')
+
+      expect(vi.mocked(mockSpawn)).toHaveBeenCalledWith(
+        'codex',
+        expect.arrayContaining(['exec']),
+        expect.any(Object)
+      )
+    })
+
+    it('throws CodexNotFoundError when codex not on path', () => {
+      vi.mocked(mockExecSync).mockImplementation(() => { throw new Error('not found') })
+      const qmCodex = new QueueManager(broadcast, undefined, [], undefined, { provider: 'codex' })
+      expect(() => qmCodex.enqueue('/implement')).toThrow()
+    })
+  })
+
+  // ─── stdout JSON parsing ──────────────────────────────────────────────────────
+
+  describe('stdout JSON event parsing', () => {
+    it('extracts display text from assistant events', async () => {
+      vi.mocked(mockExecSync).mockReturnValue(Buffer.from('/usr/bin/claude'))
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+      vi.mocked(mockUuidV4).mockReturnValue('parse-job' as any)
+
+      qm.enqueue('/implement')
+
+      const assistantEvent = JSON.stringify({
+        type: 'assistant',
+        message: { content: [{ type: 'text', text: 'Hello world' }] },
+      })
+      child.stdout!.push(assistantEvent + '\n')
+      await new Promise((r) => setTimeout(r, 50))
+
+      const logMessages = qm.getLogBuffer()
+      const displayMsg = logMessages.find((m) => m.line === 'Hello world')
+      expect(displayMsg).toBeDefined()
+    })
+
+    it('extracts display text from tool_use events', async () => {
+      vi.mocked(mockExecSync).mockReturnValue(Buffer.from('/usr/bin/claude'))
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+      vi.mocked(mockUuidV4).mockReturnValue('tool-job' as any)
+
+      qm.enqueue('/implement')
+
+      const toolEvent = JSON.stringify({
+        type: 'tool_use',
+        name: 'edit_file',
+        input: { path: 'test.ts' },
+      })
+      child.stdout!.push(toolEvent + '\n')
+      await new Promise((r) => setTimeout(r, 50))
+
+      const logMessages = qm.getLogBuffer()
+      const toolMsg = logMessages.find((m) => m.line?.includes('[tool: edit_file]'))
+      expect(toolMsg).toBeDefined()
+    })
+
+    it('skips display for system and result events', async () => {
+      vi.mocked(mockExecSync).mockReturnValue(Buffer.from('/usr/bin/claude'))
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+      vi.mocked(mockUuidV4).mockReturnValue('skip-job' as any)
+
+      qm.enqueue('/implement')
+      broadcast.mockClear()
+
+      const systemEvent = JSON.stringify({ type: 'system' })
+      child.stdout!.push(systemEvent + '\n')
+      await new Promise((r) => setTimeout(r, 50))
+
+      // Event is broadcast but no log line emitted
+      const eventBroadcasts = broadcast.mock.calls.filter(
+        (args: unknown[]) => (args[0] as WsMessage).type === 'event'
+      )
+      expect(eventBroadcasts.length).toBeGreaterThan(0)
+    })
+
+    it('handles plain text stdout lines', async () => {
+      vi.mocked(mockExecSync).mockReturnValue(Buffer.from('/usr/bin/claude'))
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+      vi.mocked(mockUuidV4).mockReturnValue('plain-job' as any)
+
+      qm.enqueue('/implement')
+
+      child.stdout!.push('plain text line\n')
+      await new Promise((r) => setTimeout(r, 50))
+
+      const logMessages = qm.getLogBuffer()
+      const plainMsg = logMessages.find((m) => m.line === 'plain text line')
+      expect(plainMsg).toBeDefined()
+    })
+
+    it('processes stderr lines', async () => {
+      vi.mocked(mockExecSync).mockReturnValue(Buffer.from('/usr/bin/claude'))
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+      vi.mocked(mockUuidV4).mockReturnValue('stderr-job' as any)
+
+      qm.enqueue('/implement')
+
+      child.stderr!.push('error output\n')
+      await new Promise((r) => setTimeout(r, 50))
+
+      const logMessages = qm.getLogBuffer()
+      const errMsg = logMessages.find((m) => m.line === 'error output' && m.source === 'stderr')
+      expect(errMsg).toBeDefined()
+    })
+  })
+
+  // ─── DB-backed stdout/stderr with appendEvent ──────────────────────────────
+
+  describe('DB-backed event recording', () => {
+    it('records stdout JSON events in DB', async () => {
+      vi.mocked(mockExecSync).mockReturnValue(Buffer.from('/usr/bin/claude'))
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+      vi.mocked(mockUuidV4).mockReturnValue('db-event-job' as any)
+
+      const db = initDb(':memory:')
+      const qmWithDb = new QueueManager(broadcast, db)
+      qmWithDb.enqueue('/implement')
+
+      const event = JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'Hi' }] } })
+      child.stdout!.push(event + '\n')
+      await new Promise((r) => setTimeout(r, 50))
+
+      const events = db.prepare('SELECT * FROM events WHERE job_id = ?').all('db-event-job') as any[]
+      expect(events.length).toBeGreaterThan(0)
+    })
+
+    it('records stderr lines in DB', async () => {
+      vi.mocked(mockExecSync).mockReturnValue(Buffer.from('/usr/bin/claude'))
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+      vi.mocked(mockUuidV4).mockReturnValue('db-stderr-job' as any)
+
+      const db = initDb(':memory:')
+      const qmWithDb = new QueueManager(broadcast, db)
+      qmWithDb.enqueue('/implement')
+
+      child.stderr!.push('stderr line\n')
+      await new Promise((r) => setTimeout(r, 50))
+
+      const events = db.prepare("SELECT * FROM events WHERE job_id = ? AND source = 'stderr'").all('db-stderr-job') as any[]
+      expect(events.length).toBeGreaterThan(0)
+    })
+  })
+
+  // ─── Job exit without DB (non-result event) ─────────────────────────────────
+
+  describe('job exit without result event', () => {
+    it('emits exit message without cost when no result event', async () => {
+      vi.mocked(mockExecSync).mockReturnValue(Buffer.from('/usr/bin/claude'))
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+      vi.mocked(mockUuidV4).mockReturnValue('no-result-job' as any)
+
+      qm.enqueue('/implement')
+      child.emit('close', 0)
+      await new Promise((r) => setTimeout(r, 50))
+
+      const logMessages = qm.getLogBuffer()
+      const exitMsg = logMessages.find((m) => m.line?.includes('process exited'))
+      expect(exitMsg).toBeDefined()
+    })
+  })
+
+  // ─── Kill timer cleanup on exit ──────────────────────────────────────────────
+
+  describe('kill timer cleanup', () => {
+    it('clears kill timer when process exits after cancel', async () => {
+      vi.useFakeTimers()
+      vi.mocked(mockExecSync).mockReturnValue(Buffer.from('/usr/bin/claude'))
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+      vi.mocked(mockUuidV4).mockReturnValue('kill-timer-job' as any)
+
+      qm.enqueue('/implement')
+      qm.cancel('kill-timer-job')
+
+      // Advance time partially (kill timer is 5s)
+      vi.advanceTimersByTime(2000)
+
+      // Process exits before kill timer fires
+      child.emit('close', 1)
+      await vi.advanceTimersByTimeAsync(50)
+
+      // If kill timer wasn't cleared, advancing by 3 more seconds would cause issues
+      vi.advanceTimersByTime(5000)
+
+      const job = qm.getJobs().find((j) => j.id === 'kill-timer-job')
+      expect(job?.status).toBe('canceled')
+      vi.useRealTimers()
+    })
+  })
 })

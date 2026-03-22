@@ -172,5 +172,85 @@ describe('docs-router', () => {
       const res = await request(buildApp()).get('/docs/general/bad%5Cslug')
       expect([400, 404]).toContain(res.status)
     })
+
+    it('returns 500 when readFileSync throws on an existing file', async () => {
+      const genDir = path.join(docsDir, 'general')
+      fs.mkdirSync(genDir, { recursive: true })
+      fs.writeFileSync(path.join(genDir, 'read-error.md'), '# Content')
+
+      // Mock readFileSync to throw after existsSync returns true
+      const origReadFileSync = fs.readFileSync
+      vi.spyOn(fs, 'readFileSync').mockImplementation((p, ...args) => {
+        if (typeof p === 'string' && p.includes('read-error.md')) {
+          throw new Error('Permission denied')
+        }
+        return origReadFileSync(p, ...args as [any])
+      })
+
+      const res = await request(buildApp()).get('/docs/general/read-error')
+      expect(res.status).toBe(500)
+      expect(res.body.error).toContain('Failed to read document')
+    })
+  })
+
+  // ── Error handling in listing ────────────────────────────────────────────
+
+  describe('GET /docs error handling', () => {
+    it('handles readdirSync failure gracefully', async () => {
+      const opsDir = path.join(docsDir, 'operations')
+      fs.mkdirSync(opsDir, { recursive: true })
+
+      // Make readdirSync throw for the operations directory
+      const origReaddirSync = fs.readdirSync
+      vi.spyOn(fs, 'readdirSync').mockImplementation((p, ...args) => {
+        if (typeof p === 'string' && p.includes('operations')) {
+          throw new Error('I/O error')
+        }
+        return origReaddirSync(p, ...args as [any])
+      })
+
+      const res = await request(buildApp()).get('/docs')
+      expect(res.status).toBe(200)
+      const opsCat = res.body.categories.find(
+        (c: { slug: string }) => c.slug === 'operations'
+      )
+      expect(opsCat.docs).toEqual([])
+    })
+
+    it('handles readFileSync failure in doc listing gracefully', async () => {
+      const opsDir = path.join(docsDir, 'operations')
+      fs.mkdirSync(opsDir, { recursive: true })
+      fs.writeFileSync(path.join(opsDir, 'broken.md'), '# Broken')
+
+      const origReadFileSync = fs.readFileSync
+      vi.spyOn(fs, 'readFileSync').mockImplementation((p, ...args) => {
+        if (typeof p === 'string' && p.includes('broken.md')) {
+          throw new Error('Corrupted file')
+        }
+        return origReadFileSync(p, ...args as [any])
+      })
+
+      const res = await request(buildApp()).get('/docs')
+      expect(res.status).toBe(200)
+      const opsCat = res.body.categories.find(
+        (c: { slug: string }) => c.slug === 'operations'
+      )
+      // Should use slug-derived title as fallback
+      expect(opsCat.docs[0].title).toBe('Broken')
+    })
+
+    it('uses bundled docs when user docs dir does not exist', async () => {
+      // Point homedir to a dir without .specrails/docs
+      const emptyHome = fs.mkdtempSync(path.join(os.tmpdir(), 'specrails-empty-'))
+      vi.spyOn(os, 'homedir').mockReturnValue(emptyHome)
+
+      const res = await request(buildApp()).get('/docs')
+      expect(res.status).toBe(200)
+      // Should still return categories (bundled or empty fallback)
+      expect(res.body.categories).toBeDefined()
+      expect(res.body.categories.length).toBe(3)
+
+      fs.rmSync(emptyHome, { recursive: true, force: true })
+    })
   })
 })
