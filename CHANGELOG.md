@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.2](https://github.com/fjpulidop/specrails-hub/compare/v1.20.1...v1.20.2) (2026-03-22)
+
+
+### Bug Fixes
+
+* enable Codex setup chat — generate synthetic sessionId and handle resume (SPEA-616) ([#134](https://github.com/fjpulidop/specrails-hub/issues/134)) ([86e7cce](https://github.com/fjpulidop/specrails-hub/commit/86e7cce8bbe7a9ff49fbd85cf1d7b3bbba2c81c3))
+
 ## [1.20.1](https://github.com/fjpulidop/specrails-hub/compare/v1.20.0...v1.20.1) (2026-03-22)
 
 
