@@ -324,6 +324,115 @@ describe('CommandPalette', () => {
     expect(onOpenOverview).toHaveBeenCalled()
   })
 
+  it('shows Hub Analytics when onOpenAnalytics provided', async () => {
+    const onOpenAnalytics = vi.fn()
+    const user = userEvent.setup()
+    render(<CommandPalette onOpenAnalytics={onOpenAnalytics} />)
+
+    await user.keyboard('{Meta>}k{/Meta}')
+    await waitFor(() => {
+      expect(screen.getByText('Hub Analytics')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('Hub Analytics'))
+    expect(onOpenAnalytics).toHaveBeenCalled()
+  })
+
+  it('calls onOpenDocs when provided', async () => {
+    const onOpenDocs = vi.fn()
+    const user = userEvent.setup()
+    render(<CommandPalette onOpenDocs={onOpenDocs} />)
+
+    await user.keyboard('{Meta>}k{/Meta}')
+    await waitFor(() => {
+      expect(screen.getByText('Docs')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('Docs'))
+    expect(onOpenDocs).toHaveBeenCalled()
+  })
+
+  // ─── Error handling ───────────────────────────────────────────────────────
+
+  it('shows error toast when command spawn fails', async () => {
+    const { toast } = await import('sonner')
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (typeof url === 'string' && url.includes('/config')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            commands: [{ id: 'c1', name: 'Implement', slug: 'implement', description: 'Build' }],
+          }),
+        })
+      }
+      if (typeof url === 'string' && url.includes('/jobs')) {
+        return Promise.resolve({ ok: true, json: async () => ({ jobs: [] }) })
+      }
+      if (typeof url === 'string' && url.includes('/spawn')) {
+        return Promise.resolve({
+          ok: false,
+          json: async () => ({ error: 'Budget exceeded' }),
+        })
+      }
+      return Promise.resolve({ ok: false, json: async () => ({}) })
+    })
+
+    const user = userEvent.setup()
+    render(<CommandPalette />)
+
+    await user.keyboard('{Meta>}k{/Meta}')
+    await waitFor(() => {
+      expect(screen.getByText('Implement')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('Implement'))
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Budget exceeded')
+    })
+  })
+
+  it('handles fetch errors gracefully when palette opens', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error('Network error'))
+
+    const user = userEvent.setup()
+    render(<CommandPalette />)
+
+    await user.keyboard('{Meta>}k{/Meta}')
+
+    // Projects from context should still show even if fetch fails
+    await waitFor(() => {
+      expect(screen.getByText('Project Alpha')).toBeInTheDocument()
+      expect(screen.getByText('Dashboard')).toBeInTheDocument()
+    })
+  })
+
+  it('navigates to /settings in legacy mode (no onOpenSettings)', async () => {
+    const user = userEvent.setup()
+    render(<CommandPalette />)
+
+    await user.keyboard('{Meta>}k{/Meta}')
+    await waitFor(() => {
+      expect(screen.getByText('Settings')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('Settings'))
+    expect(mockNavigate).toHaveBeenCalledWith('/settings')
+  })
+
+  it('navigates to /docs in legacy mode (no onOpenDocs)', async () => {
+    const user = userEvent.setup()
+    render(<CommandPalette />)
+
+    await user.keyboard('{Meta>}k{/Meta}')
+    await waitFor(() => {
+      expect(screen.getByText('Docs')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('Docs'))
+    expect(mockNavigate).toHaveBeenCalledWith('/docs')
+  })
+
   // ─── Keyboard hints ───────────────────────────────────────────────────────
 
   it('shows keyboard hints in footer', async () => {
