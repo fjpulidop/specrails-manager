@@ -168,9 +168,9 @@ export function CommandPalette({ onOpenSettings, onOpenOverview, onOpenAnalytics
           </Command.Group>
         )}
 
-        {/* Commands */}
+        {/* Spec */}
         {commands.length > 0 && (
-          <Command.Group heading="Commands">
+          <Command.Group heading="Spec">
             {commands.map((cmd) => (
               <Command.Item
                 key={cmd.id}
@@ -190,9 +190,9 @@ export function CommandPalette({ onOpenSettings, onOpenOverview, onOpenAnalytics
           </Command.Group>
         )}
 
-        {/* Recent Jobs */}
+        {/* Jobs */}
         {recentJobs.length > 0 && (
-          <Command.Group heading="Recent Jobs">
+          <Command.Group heading="Jobs">
             {recentJobs.map((job) => (
               <Command.Item
                 key={job.id}

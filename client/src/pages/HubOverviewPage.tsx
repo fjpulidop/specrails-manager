@@ -468,12 +468,12 @@ export default function HubOverviewPage() {
               />
             )}
 
-            {/* Project Health Grid */}
+            {/* Health Grid */}
             {!loading && health && health.projects.length > 0 && (
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <HeartPulse className="w-4 h-4 text-muted-foreground" />
-                  <h2 className="text-sm font-medium">Project Health</h2>
+                  <h2 className="text-sm font-medium">Health</h2>
                   <span className="text-xs text-muted-foreground ml-auto">
                     {health.aggregated.greenCount} healthy · {health.aggregated.yellowCount} warning · {health.aggregated.redCount} critical
                   </span>

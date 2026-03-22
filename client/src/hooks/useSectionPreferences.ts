@@ -2,9 +2,9 @@ import { useState, useCallback, useRef } from 'react'
 
 const STORAGE_KEY = 'specrails.dashboard.sectionPrefs'
 
-export type SectionId = 'health' | 'commands' | 'runbooks' | 'jobs'
+export type SectionId = 'health' | 'commands' | 'rails' | 'jobs'
 
-export const DEFAULT_ORDER: SectionId[] = ['health', 'runbooks', 'commands', 'jobs']
+export const DEFAULT_ORDER: SectionId[] = ['commands', 'rails', 'jobs', 'health']
 
 export interface SectionPrefs {
   /** Order of sections on the dashboard */

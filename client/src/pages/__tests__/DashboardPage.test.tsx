@@ -89,17 +89,17 @@ describe('DashboardPage', () => {
 
   it('renders all four section headers', () => {
     render(<DashboardPage />)
-    expect(screen.getByText('Project Health')).toBeInTheDocument()
-    expect(screen.getByText('Commands')).toBeInTheDocument()
-    expect(screen.getByText('Runbooks')).toBeInTheDocument()
-    expect(screen.getByText('Recent Jobs')).toBeInTheDocument()
+    expect(screen.getByText('Health')).toBeInTheDocument()
+    expect(screen.getByText('Spec')).toBeInTheDocument()
+    expect(screen.getByText('Rails')).toBeInTheDocument()
+    expect(screen.getByText('Jobs')).toBeInTheDocument()
   })
 
   it('renders section containers with test ids', () => {
     render(<DashboardPage />)
     expect(screen.getByTestId('section-health')).toBeInTheDocument()
     expect(screen.getByTestId('section-commands')).toBeInTheDocument()
-    expect(screen.getByTestId('section-runbooks')).toBeInTheDocument()
+    expect(screen.getByTestId('section-rails')).toBeInTheDocument()
     expect(screen.getByTestId('section-jobs')).toBeInTheDocument()
   })
 
@@ -109,13 +109,13 @@ describe('DashboardPage', () => {
     render(<DashboardPage />)
     expect(screen.queryByTestId('content-health')).not.toBeInTheDocument()
     expect(screen.queryByTestId('content-commands')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('content-runbooks')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('content-rails')).not.toBeInTheDocument()
     expect(screen.queryByTestId('content-jobs')).not.toBeInTheDocument()
   })
 
   // ─── Expand/collapse ─────────────────────────────────────────────────
 
-  it('expanding Commands section reveals content', () => {
+  it('expanding Spec section reveals content', () => {
     render(<DashboardPage />)
     fireEvent.click(screen.getByTestId('toggle-commands'))
     expect(screen.getByTestId('content-commands')).toBeInTheDocument()
@@ -123,7 +123,7 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/No commands installed/i)).toBeInTheDocument()
   })
 
-  it('expanding Recent Jobs section reveals content', () => {
+  it('expanding Jobs section reveals content', () => {
     render(<DashboardPage />)
     fireEvent.click(screen.getByTestId('toggle-jobs'))
     expect(screen.getByTestId('content-jobs')).toBeInTheDocument()
@@ -146,7 +146,7 @@ describe('DashboardPage', () => {
     render(<DashboardPage />)
     expect(screen.getByTestId('pin-health')).toBeInTheDocument()
     expect(screen.getByTestId('pin-commands')).toBeInTheDocument()
-    expect(screen.getByTestId('pin-runbooks')).toBeInTheDocument()
+    expect(screen.getByTestId('pin-rails')).toBeInTheDocument()
     expect(screen.getByTestId('pin-jobs')).toBeInTheDocument()
   })
 
@@ -156,7 +156,7 @@ describe('DashboardPage', () => {
     render(<DashboardPage />)
     expect(screen.getByTestId('drag-handle-health')).toBeInTheDocument()
     expect(screen.getByTestId('drag-handle-commands')).toBeInTheDocument()
-    expect(screen.getByTestId('drag-handle-runbooks')).toBeInTheDocument()
+    expect(screen.getByTestId('drag-handle-rails')).toBeInTheDocument()
     expect(screen.getByTestId('drag-handle-jobs')).toBeInTheDocument()
   })
 
@@ -164,7 +164,7 @@ describe('DashboardPage', () => {
 
   it('pinned sections start expanded', () => {
     localStorage.setItem('specrails.dashboard.sectionPrefs', JSON.stringify({
-      order: ['health', 'runbooks', 'commands', 'jobs'],
+      order: ['health', 'rails', 'commands', 'jobs'],
       pinned: ['commands'],
     }))
 

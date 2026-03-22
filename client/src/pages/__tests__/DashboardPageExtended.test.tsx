@@ -103,10 +103,10 @@ describe('DashboardPage - extended coverage', () => {
     })
   })
 
-  it('renders Commands section with mocked commands', () => {
+  it('renders Spec section with mocked commands', () => {
     render(<DashboardPage />)
     // CommandGrid should be rendered with the implement command once expanded
-    expect(screen.getByText('Commands')).toBeInTheDocument()
+    expect(screen.getByText('Spec')).toBeInTheDocument()
   })
 
   it('renders proposal jobs from proposals list when jobs section is expanded', () => {
@@ -158,7 +158,7 @@ describe('DashboardPage - extended coverage', () => {
     render(<DashboardPage />)
     expandSection('jobs')
 
-    expect(screen.getByText('Recent Jobs')).toBeInTheDocument()
+    expect(screen.getByText('Jobs')).toBeInTheDocument()
     void toast
   })
 
@@ -172,7 +172,7 @@ describe('DashboardPage - extended coverage', () => {
       }),
     }))
     render(<DashboardPage />)
-    expect(screen.getByText('Commands')).toBeInTheDocument()
+    expect(screen.getByText('Spec')).toBeInTheDocument()
   })
 
   it('ImplementWizard opens when wizard state is implement', () => {
@@ -193,7 +193,7 @@ describe('DashboardPage - extended coverage', () => {
 
   it('enrichedCommands includes totalRuns from jobs matching command slug', () => {
     render(<DashboardPage />)
-    expect(screen.getByText('Commands')).toBeInTheDocument()
+    expect(screen.getByText('Spec')).toBeInTheDocument()
   })
 })
 

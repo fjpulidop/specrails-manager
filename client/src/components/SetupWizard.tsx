@@ -210,7 +210,7 @@ function CompleteStep({
           </div>
           <div>
             <div className="text-2xl font-bold text-dracula-green">{summary.commands}</div>
-            <div className="text-[10px] text-muted-foreground">Commands</div>
+            <div className="text-[10px] text-muted-foreground">Spec</div>
           </div>
         </div>
       </div>

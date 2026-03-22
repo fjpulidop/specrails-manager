@@ -115,10 +115,10 @@ describe('Discovery section — command order', () => {
   it('propose-spec is the first Discovery item', () => {
     renderGrid()
     // "Discovery" span's ancestor div contains the command buttons for that section
-    // We check relative order: Propose Spec should appear before Auto-propose Specs
+    // We check relative order: Custom-Propose should appear before Auto-propose
     const allButtons = screen.getAllByRole('button')
-    const proposeSpecIdx = allButtons.findIndex((b) => b.textContent?.includes('Propose Spec') && !b.textContent?.includes('Auto'))
-    const autoPropose = allButtons.findIndex((b) => b.textContent?.includes('Auto-propose Specs'))
+    const proposeSpecIdx = allButtons.findIndex((b) => b.textContent?.includes('Custom-Propose'))
+    const autoPropose = allButtons.findIndex((b) => b.textContent?.includes('Auto-propose') && !b.textContent?.includes('Auto-Select'))
     expect(proposeSpecIdx).toBeGreaterThanOrEqual(0)
     expect(proposeSpecIdx).toBeLessThan(autoPropose)
   })
@@ -126,11 +126,11 @@ describe('Discovery section — command order', () => {
   it('update-product-driven-backlog is the second Discovery item', () => {
     renderGrid()
     const allButtons = screen.getAllByRole('button')
-    const autoPropose = allButtons.findIndex((b) => b.textContent?.includes('Auto-propose Specs'))
+    const autoPropose = allButtons.findIndex((b) => b.textContent?.includes('Auto-propose') && !b.textContent?.includes('Auto-Select'))
     const autoSelect = allButtons.findIndex((b) => b.textContent?.includes('Auto-Select Specs'))
     expect(autoPropose).toBeGreaterThanOrEqual(0)
     expect(autoPropose).toBeLessThan(autoSelect)
-    expect(screen.getByRole('button', { name: /Auto-propose Specs/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Auto-propose/i })).toBeInTheDocument()
   })
 
   it('product-backlog is the third Discovery item', () => {
@@ -180,9 +180,9 @@ describe('propose-feature is hidden', () => {
 // ---------------------------------------------------------------------------
 
 describe('Display name overrides', () => {
-  it('update-product-driven-backlog displays as "Auto-propose Specs"', () => {
+  it('update-product-driven-backlog displays as "Auto-propose"', () => {
     renderGrid()
-    expect(screen.getByText('Auto-propose Specs')).toBeInTheDocument()
+    expect(screen.getByText('Auto-propose')).toBeInTheDocument()
   })
 
   it('product-backlog displays as "Auto-Select Specs"', () => {
@@ -211,8 +211,8 @@ describe('Display name overrides', () => {
 describe('Tooltips show real /sr:<slug> command', () => {
   it('update-product-driven-backlog command button is a tooltip trigger', () => {
     renderGrid()
-    // The button for "Auto-propose Specs" is wrapped in a TooltipTrigger — it renders fine
-    expect(screen.getByRole('button', { name: /Auto-propose Specs/i })).toBeInTheDocument()
+    // The button for "Auto-propose" is wrapped in a TooltipTrigger — it renders fine
+    expect(screen.getByRole('button', { name: /Auto-propose/i })).toBeInTheDocument()
   })
 
   it('product-backlog command button is a tooltip trigger', () => {
@@ -223,10 +223,10 @@ describe('Tooltips show real /sr:<slug> command', () => {
   it('tooltip does NOT contain the display name override for update-product-driven-backlog', async () => {
     const user = userEvent.setup()
     renderGrid()
-    const button = screen.getByRole('button', { name: /Auto-propose Specs/i })
+    const button = screen.getByRole('button', { name: /Auto-propose/i })
     await user.hover(button)
-    // The tooltip should show the slug-based text, not /sr:Auto-propose Specs
-    expect(document.body).not.toHaveTextContent('/sr:Auto-propose Specs')
+    // The tooltip should show the slug-based text, not /sr:Auto-propose
+    expect(document.body).not.toHaveTextContent('/sr:Auto-propose')
   })
 })
 
@@ -256,7 +256,7 @@ describe('Others section', () => {
     renderGrid()
     const othersBtn = screen.getByRole('button', { name: /Others/i })
     await user.click(othersBtn)
-    const proposeCells = screen.queryAllByText('Propose Spec')
+    const proposeCells = screen.queryAllByText('Custom-Propose')
     expect(proposeCells).toHaveLength(1)
   })
 })
@@ -290,9 +290,9 @@ describe('Click behaviour', () => {
   it('clicking propose-spec does NOT call onOpenWizard', async () => {
     const user = userEvent.setup()
     renderGrid()
-    // There may be multiple buttons matching "Propose Spec" (e.g., tooltip content)
+    // There may be multiple buttons matching "Custom-Propose" (e.g., tooltip content)
     // Use getAllByRole and pick the first one that's a proper command button
-    const btns = screen.getAllByRole('button', { name: /Propose Spec/i })
+    const btns = screen.getAllByRole('button', { name: /Custom-Propose/i })
     // The first button is the command card button
     await user.click(btns[0])
     expect(onOpenWizard).not.toHaveBeenCalled()
@@ -301,7 +301,7 @@ describe('Click behaviour', () => {
   it('clicking propose-spec navigates to job detail after spawn', async () => {
     const user = userEvent.setup()
     renderGrid()
-    const btns = screen.getAllByRole('button', { name: /Propose Spec/i })
+    const btns = screen.getAllByRole('button', { name: /Custom-Propose/i })
     await user.click(btns[0])
     // navigate is called asynchronously after the fetch resolves
     await vi.waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/jobs/test-job-id'))

@@ -1178,7 +1178,7 @@ describe('project-router', () => {
   })
 
   // ─── Pipeline routes ─────────────────────────────────────────────────────
-  // NOTE: POST /pipelines removed — ad-hoc pipeline creation consolidated into runbooks (templates).
+  // NOTE: POST /pipelines removed — ad-hoc pipeline creation consolidated into rails (templates).
 
   describe('GET /:projectId/pipelines/:pipelineId', () => {
     it('returns 404 for unknown pipeline', async () => {

@@ -415,11 +415,11 @@ describe('SetupWizard', () => {
       expect(screen.getByText('12')).toBeInTheDocument()
     })
 
-    it('shows Agents, Personas, Commands labels', async () => {
+    it('shows Agents, Personas, Spec labels', async () => {
       await renderCompleteStep()
       expect(screen.getByText('Agents')).toBeInTheDocument()
       expect(screen.getByText('Personas')).toBeInTheDocument()
-      expect(screen.getByText('Commands')).toBeInTheDocument()
+      expect(screen.getByText('Spec')).toBeInTheDocument()
     })
 
     it('renders Continue to project button', async () => {

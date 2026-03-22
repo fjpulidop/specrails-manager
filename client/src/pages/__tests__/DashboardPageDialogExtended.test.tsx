@@ -261,10 +261,10 @@ describe('DashboardPage - proposal dialog content', () => {
     })
   })
 
-  it('Commands section heading always renders regardless of loading state', () => {
+  it('Spec section heading always renders regardless of loading state', () => {
     render(<DashboardPage />)
-    // Commands heading is always present
-    expect(screen.getByText('Commands')).toBeInTheDocument()
+    // Spec heading is always present
+    expect(screen.getByText('Spec')).toBeInTheDocument()
   })
 
   it('proposal idea shorter than 60 chars is not truncated in command', () => {
