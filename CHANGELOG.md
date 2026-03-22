@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.17.0](https://github.com/fjpulidop/specrails-hub/compare/v1.16.0...v1.17.0) (2026-03-22)
+
+
+### Features
+
+* **client:** OS notifications — native alerts when jobs complete or fail (SPEA-577) ([#107](https://github.com/fjpulidop/specrails-hub/issues/107)) ([8af472b](https://github.com/fjpulidop/specrails-hub/commit/8af472bd733369d203f0c1c41cba6906c703ed9c))
+* command palette (Cmd+K) — instant navigation and actions (SPEA-575) ([#106](https://github.com/fjpulidop/specrails-hub/issues/106)) ([682260a](https://github.com/fjpulidop/specrails-hub/commit/682260ae697efb239c359deeb741eff092c0ad8f))
+* job priority levels — low/normal/high/critical queue ordering (SPEA-585) ([#113](https://github.com/fjpulidop/specrails-hub/issues/113)) ([dbe3e31](https://github.com/fjpulidop/specrails-hub/commit/dbe3e31ad166a6653daa49f11119f15144407102))
+
 ## [1.16.0](https://github.com/fjpulidop/specrails-hub/compare/v1.15.0...v1.16.0) (2026-03-21)
 
 
