@@ -52,7 +52,7 @@ function createMockRegistry(hubDb: DbInstance) {
         db: {} as any,
         queueManager: {} as any,
         chatManager: {} as any,
-        setupManager: {} as any,
+        setupManager: { isInstalling: vi.fn(() => false), isSettingUp: vi.fn(() => false) } as any,
         proposalManager: {} as any,
         broadcast: vi.fn(),
       }
@@ -99,6 +99,7 @@ describe('hub-router', () => {
       const res = await request(app).get('/api/hub/projects')
       expect(res.status).toBe(200)
       expect(res.body.projects).toEqual([])
+      expect(res.body.setupProjectIds).toEqual([])
     })
 
     it('returns registered projects', async () => {
@@ -432,7 +433,7 @@ describe('hub-router', () => {
         db,
         queueManager: {} as any,
         chatManager: {} as any,
-        setupManager: {} as any,
+        setupManager: { isInstalling: vi.fn(() => false), isSettingUp: vi.fn(() => false) } as any,
         proposalManager: {} as any,
         broadcast: vi.fn(),
       })
@@ -1009,7 +1010,7 @@ describe('hub-router', () => {
         db,
         queueManager: {} as any,
         chatManager: {} as any,
-        setupManager: {} as any,
+        setupManager: { isInstalling: vi.fn(() => false), isSettingUp: vi.fn(() => false) } as any,
         proposalManager: {} as any,
         broadcast: vi.fn(),
       })

@@ -98,43 +98,8 @@ export function createProjectRouter(registry: ProjectRegistry): Router {
   })
 
   // ─── Pipeline routes ──────────────────────────────────────────────────────────
-
-  router.post('/:projectId/pipelines', (req: Request, res: Response) => {
-    const { steps } = req.body ?? {}
-    if (!Array.isArray(steps) || steps.length === 0) {
-      res.status(400).json({ error: 'steps must be a non-empty array of { command: string }' })
-      return
-    }
-    for (const step of steps) {
-      if (!step.command || typeof step.command !== 'string' || !step.command.trim()) {
-        res.status(400).json({ error: 'Each step must have a non-empty command string' })
-        return
-      }
-    }
-    try {
-      const pipelineId = uuidv4()
-      const jobs: Array<{ jobId: string; command: string; position: number }> = []
-      let prevJobId: string | null = null
-
-      for (let i = 0; i < steps.length; i++) {
-        const job = ctx(req).queueManager.enqueue(steps[i].command, 'normal', {
-          dependsOnJobId: prevJobId ?? undefined,
-          pipelineId,
-        })
-        jobs.push({ jobId: job.id, command: steps[i].command, position: job.queuePosition ?? i + 1 })
-        prevJobId = job.id
-      }
-
-      res.status(202).json({ pipelineId, jobs })
-    } catch (err) {
-      if (err instanceof ClaudeNotFoundError) {
-        res.status(400).json({ error: err.message })
-      } else {
-        console.error('[project-router] pipeline error:', err)
-        res.status(500).json({ error: 'Internal server error' })
-      }
-    }
-  })
+  // NOTE: Ad-hoc pipeline creation removed — use runbooks (templates) instead.
+  // The GET route remains for viewing existing pipeline status.
 
   router.get('/:projectId/pipelines/:pipelineId', (req: Request, res: Response) => {
     const { db } = ctx(req)

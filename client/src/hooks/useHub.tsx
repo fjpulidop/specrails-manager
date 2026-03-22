@@ -68,8 +68,12 @@ export function HubProvider({ children }: { children: ReactNode }) {
       try {
         const res = await fetch('/api/hub/projects')
         if (!res.ok) return
-        const data = await res.json() as { projects: HubProject[] }
+        const data = await res.json() as { projects: HubProject[]; setupProjectIds?: string[] }
         setProjects(data.projects)
+        // Restore setup wizard state from server (survives page refresh)
+        if (data.setupProjectIds && data.setupProjectIds.length > 0) {
+          setSetupProjectIds(new Set(data.setupProjectIds))
+        }
         // Default to first project if none selected
         if (data.projects.length > 0) {
           setActiveProjectIdRaw((prev) => {

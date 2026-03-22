@@ -184,6 +184,7 @@ function HubApp() {
       <div className="flex-1 overflow-hidden">
         {isInSetup && activeProject ? (
           <SetupWizard
+            key={activeProject.id}
             project={activeProject}
             onComplete={() => completeSetupWizard(activeProject.id)}
             onSkip={() => completeSetupWizard(activeProject.id)}

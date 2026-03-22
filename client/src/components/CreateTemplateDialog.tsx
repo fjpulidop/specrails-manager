@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { Plus, Trash2, GripVertical } from 'lucide-react'
 import { getApiBase } from '../lib/api'
-import type { JobTemplate } from '../types'
+import type { CommandInfo, JobTemplate } from '../types'
 import {
   Dialog,
   DialogContent,
@@ -16,22 +16,23 @@ import { Input } from './ui/input'
 interface CreateTemplateDialogProps {
   open: boolean
   template?: JobTemplate | null  // when editing
+  commands?: CommandInfo[]       // available specrails commands for autocomplete
   onClose: () => void
   onSaved: (template: JobTemplate) => void
 }
 
-export function CreateTemplateDialog({ open, template, onClose, onSaved }: CreateTemplateDialogProps) {
+export function CreateTemplateDialog({ open, template, commands = [], onClose, onSaved }: CreateTemplateDialogProps) {
   const isEditing = template != null
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [commands, setCommands] = useState<string[]>([''])
+  const [steps, setSteps] = useState<string[]>([''])
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     if (open) {
       setName(template?.name ?? '')
       setDescription(template?.description ?? '')
-      setCommands(template?.commands.length ? [...template.commands] : [''])
+      setSteps(template?.commands.length ? [...template.commands] : [''])
     }
   }, [open, template])
 
@@ -40,31 +41,31 @@ export function CreateTemplateDialog({ open, template, onClose, onSaved }: Creat
     onClose()
   }
 
-  function addCommand() {
-    setCommands((prev) => [...prev, ''])
+  function addStep() {
+    setSteps((prev) => [...prev, ''])
   }
 
-  function removeCommand(index: number) {
-    setCommands((prev) => prev.filter((_, i) => i !== index))
+  function removeStep(index: number) {
+    setSteps((prev) => prev.filter((_, i) => i !== index))
   }
 
-  function setCommand(index: number, value: string) {
-    setCommands((prev) => prev.map((c, i) => (i === index ? value : c)))
+  function setStep(index: number, value: string) {
+    setSteps((prev) => prev.map((c, i) => (i === index ? value : c)))
   }
 
-  function moveCommand(index: number, direction: 'up' | 'down') {
-    const next = [...commands]
+  function moveStep(index: number, direction: 'up' | 'down') {
+    const next = [...steps]
     const swap = direction === 'up' ? index - 1 : index + 1
     if (swap < 0 || swap >= next.length) return
     ;[next[index], next[swap]] = [next[swap], next[index]]
-    setCommands(next)
+    setSteps(next)
   }
 
   async function handleSubmit() {
     const trimmedName = name.trim()
     if (!trimmedName) { toast.error('Name is required'); return }
-    const filtered = commands.map((c) => c.trim()).filter(Boolean)
-    if (filtered.length === 0) { toast.error('At least one command is required'); return }
+    const filtered = steps.map((c) => c.trim()).filter(Boolean)
+    if (filtered.length === 0) { toast.error('At least one step is required'); return }
 
     setSubmitting(true)
     try {
@@ -123,20 +124,27 @@ export function CreateTemplateDialog({ open, template, onClose, onSaved }: Creat
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-muted-foreground">Commands (in order)</label>
-              <Button variant="ghost" size="sm" onClick={addCommand} disabled={submitting} className="h-6 text-xs gap-1 px-2">
+              <label className="text-xs font-medium text-muted-foreground">Steps (commands or free prompts)</label>
+              <Button variant="ghost" size="sm" onClick={addStep} disabled={submitting} className="h-6 text-xs gap-1 px-2">
                 <Plus className="h-3 w-3" />
                 Add
               </Button>
             </div>
+            {commands.length > 0 && (
+              <datalist id="sr-commands-list">
+                {commands.map((c) => (
+                  <option key={c.slug} value={`/sr:${c.slug}`}>{c.name}</option>
+                ))}
+              </datalist>
+            )}
             <div className="space-y-2">
-              {commands.map((cmd, i) => (
+              {steps.map((step, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <div className="flex flex-col gap-0.5">
                     <button
                       type="button"
                       aria-label="Move up"
-                      onClick={() => moveCommand(i, 'up')}
+                      onClick={() => moveStep(i, 'up')}
                       disabled={i === 0 || submitting}
                       className="p-0.5 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
                     >
@@ -145,17 +153,18 @@ export function CreateTemplateDialog({ open, template, onClose, onSaved }: Creat
                   </div>
                   <span className="text-xs text-muted-foreground w-4 shrink-0 text-right">{i + 1}.</span>
                   <Input
-                    placeholder="/sr:implement #42"
-                    value={cmd}
-                    onChange={(e) => setCommand(i, e.target.value)}
+                    list="sr-commands-list"
+                    placeholder="Select a command or type a free prompt..."
+                    value={step}
+                    onChange={(e) => setStep(i, e.target.value)}
                     disabled={submitting}
                     className="font-mono text-xs"
                   />
                   <button
                     type="button"
-                    aria-label="Remove command"
-                    onClick={() => removeCommand(i)}
-                    disabled={commands.length <= 1 || submitting}
+                    aria-label="Remove step"
+                    onClick={() => removeStep(i)}
+                    disabled={steps.length <= 1 || submitting}
                     className="p-1 rounded text-muted-foreground hover:text-destructive disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     <Trash2 className="h-3.5 w-3.5" />

@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { toast } from 'sonner'
 import { Play, Pencil, Trash2, Plus, BookTemplate } from 'lucide-react'
 import { getApiBase } from '../lib/api'
-import type { JobTemplate } from '../types'
+import type { CommandInfo, JobTemplate } from '../types'
 import { Button } from './ui/button'
 import { CreateTemplateDialog } from './CreateTemplateDialog'
 
@@ -10,9 +10,10 @@ interface TemplateLibraryProps {
   templates: JobTemplate[]
   isLoading: boolean
   onTemplatesChanged: () => void
+  commands?: CommandInfo[]
 }
 
-export function TemplateLibrary({ templates, isLoading, onTemplatesChanged }: TemplateLibraryProps) {
+export function TemplateLibrary({ templates, isLoading, onTemplatesChanged, commands = [] }: TemplateLibraryProps) {
   const [createOpen, setCreateOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<JobTemplate | null>(null)
   const [running, setRunning] = useState<Set<string>>(new Set())
@@ -73,6 +74,7 @@ export function TemplateLibrary({ templates, isLoading, onTemplatesChanged }: Te
         </Button>
         <CreateTemplateDialog
           open={createOpen}
+          commands={commands}
           onClose={() => setCreateOpen(false)}
           onSaved={() => { onTemplatesChanged(); setCreateOpen(false) }}
         />
@@ -157,6 +159,7 @@ export function TemplateLibrary({ templates, isLoading, onTemplatesChanged }: Te
 
       <CreateTemplateDialog
         open={createOpen}
+        commands={commands}
         onClose={() => setCreateOpen(false)}
         onSaved={() => { onTemplatesChanged(); setCreateOpen(false) }}
       />
@@ -164,6 +167,7 @@ export function TemplateLibrary({ templates, isLoading, onTemplatesChanged }: Te
       <CreateTemplateDialog
         open={editTarget != null}
         template={editTarget}
+        commands={commands}
         onClose={() => setEditTarget(null)}
         onSaved={() => { onTemplatesChanged(); setEditTarget(null) }}
       />

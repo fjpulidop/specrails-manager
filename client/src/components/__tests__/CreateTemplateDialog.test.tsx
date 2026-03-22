@@ -83,7 +83,7 @@ describe('CreateTemplateDialog', () => {
 
   it('starts with one empty command row when creating', () => {
     render(<CreateTemplateDialog open={true} onClose={onClose} onSaved={onSaved} />)
-    const inputs = screen.getAllByPlaceholderText('/sr:implement #42')
+    const inputs = screen.getAllByPlaceholderText('Select a command or type a free prompt...')
     expect(inputs).toHaveLength(1)
     expect(inputs[0]).toHaveValue('')
   })
@@ -103,7 +103,7 @@ describe('CreateTemplateDialog', () => {
     const user = userEvent.setup()
     render(<CreateTemplateDialog open={true} onClose={onClose} onSaved={onSaved} />)
     await user.click(screen.getByRole('button', { name: /Add/i }))
-    const inputs = screen.getAllByPlaceholderText('/sr:implement #42')
+    const inputs = screen.getAllByPlaceholderText('Select a command or type a free prompt...')
     expect(inputs).toHaveLength(2)
   })
 
@@ -118,16 +118,16 @@ describe('CreateTemplateDialog', () => {
       />
     )
     // Template has 2 commands; remove the first one
-    const removeButtons = screen.getAllByRole('button', { name: /Remove command/i })
+    const removeButtons = screen.getAllByRole('button', { name: /Remove step/i })
     await user.click(removeButtons[0])
-    const inputs = screen.getAllByPlaceholderText('/sr:implement #42')
+    const inputs = screen.getAllByPlaceholderText('Select a command or type a free prompt...')
     expect(inputs).toHaveLength(1)
   })
 
   it('updates a command value on input change', async () => {
     const user = userEvent.setup()
     render(<CreateTemplateDialog open={true} onClose={onClose} onSaved={onSaved} />)
-    const input = screen.getByPlaceholderText('/sr:implement #42')
+    const input = screen.getByPlaceholderText('Select a command or type a free prompt...')
     await user.type(input, '/sr:implement #99')
     expect(input).toHaveValue('/sr:implement #99')
   })
@@ -146,7 +146,7 @@ describe('CreateTemplateDialog', () => {
     const moveUpButtons = screen.getAllByRole('button', { name: /Move up/i })
     // First "Move up" is disabled (index 0), second is for index 1
     await user.click(moveUpButtons[1])
-    const inputs = screen.getAllByPlaceholderText('/sr:implement #42')
+    const inputs = screen.getAllByPlaceholderText('Select a command or type a free prompt...')
     expect(inputs[0]).toHaveValue('/sr:review #1')
     expect(inputs[1]).toHaveValue('/sr:implement #1')
   })
@@ -161,7 +161,7 @@ describe('CreateTemplateDialog', () => {
         onSaved={onSaved}
       />
     )
-    const inputsBefore = screen.getAllByPlaceholderText('/sr:implement #42')
+    const inputsBefore = screen.getAllByPlaceholderText('Select a command or type a free prompt...')
     const valuesBefore = inputsBefore.map((i) => (i as HTMLInputElement).value)
 
     // Click "Move up" on first command — should be no-op (disabled)
@@ -169,7 +169,7 @@ describe('CreateTemplateDialog', () => {
     // First button is disabled; clicking disabled doesn't fire but let's verify order unchanged
     await user.click(moveUpButtons[0])
 
-    const inputsAfter = screen.getAllByPlaceholderText('/sr:implement #42')
+    const inputsAfter = screen.getAllByPlaceholderText('Select a command or type a free prompt...')
     expect(inputsAfter[0]).toHaveValue(valuesBefore[0])
     expect(inputsAfter[1]).toHaveValue(valuesBefore[1])
   })
@@ -190,7 +190,7 @@ describe('CreateTemplateDialog', () => {
     await user.type(screen.getByPlaceholderText('e.g. Full pipeline'), 'My Template')
     // Leave command empty, click Create
     await user.click(screen.getByRole('button', { name: /Create/i }))
-    expect(toast.error).toHaveBeenCalledWith('At least one command is required')
+    expect(toast.error).toHaveBeenCalledWith('At least one step is required')
     expect(global.fetch).not.toHaveBeenCalled()
   })
 
@@ -201,7 +201,7 @@ describe('CreateTemplateDialog', () => {
     render(<CreateTemplateDialog open={true} onClose={onClose} onSaved={onSaved} />)
 
     await user.type(screen.getByPlaceholderText('e.g. Full pipeline'), 'My Template')
-    await user.type(screen.getByPlaceholderText('/sr:implement #42'), '/sr:implement #1')
+    await user.type(screen.getByPlaceholderText('Select a command or type a free prompt...'), '/sr:implement #1')
     await user.click(screen.getByRole('button', { name: /Create/i }))
 
     await waitFor(() => {
@@ -247,7 +247,7 @@ describe('CreateTemplateDialog', () => {
     render(<CreateTemplateDialog open={true} onClose={onClose} onSaved={onSaved} />)
 
     await user.type(screen.getByPlaceholderText('e.g. Full pipeline'), 'My Template')
-    await user.type(screen.getByPlaceholderText('/sr:implement #42'), '/sr:implement #1')
+    await user.type(screen.getByPlaceholderText('Select a command or type a free prompt...'), '/sr:implement #1')
     await user.click(screen.getByRole('button', { name: /Create/i }))
 
     await waitFor(() => {

@@ -44,6 +44,7 @@ interface WizardSnapshot {
   logLines: string[]
   chatMessages: SetupChatMessage[]
   sessionId: string | null
+  isStreaming: boolean
 }
 
 const wizardCache = new Map<string, WizardSnapshot>()
@@ -288,10 +289,12 @@ export function SetupWizard({ project, onComplete: rawOnComplete, onSkip: rawOnS
   const [logLines, setLogLines] = useState<string[]>(cached?.logLines ?? [])
   const [chatMessages, setChatMessages] = useState<SetupChatMessage[]>(cached?.chatMessages ?? [])
   const [streamingText, setStreamingText] = useState('')
-  const [isStreaming, setIsStreaming] = useState(false)
+  const [isStreaming, setIsStreaming] = useState(cached?.isStreaming ?? false)
   const [sessionId, setSessionId] = useState<string | null>(cached?.sessionId ?? null)
   // Track whether we need to auto-start the setup phase after install completes
   const pendingSetupStart = useRef(false)
+  // Safety timeout: reset isStreaming if no new chunks arrive for 30s
+  const streamingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Save state to cache on every update so it survives unmount
   const wizardStepRef = useRef(wizardStep)
@@ -299,11 +302,13 @@ export function SetupWizard({ project, onComplete: rawOnComplete, onSkip: rawOnS
   const logLinesRef = useRef(logLines)
   const chatMessagesRef = useRef(chatMessages)
   const sessionIdRef = useRef(sessionId)
+  const isStreamingRef = useRef(isStreaming)
   wizardStepRef.current = wizardStep
   checkpointsRef.current = checkpoints
   logLinesRef.current = logLines
   chatMessagesRef.current = chatMessages
   sessionIdRef.current = sessionId
+  isStreamingRef.current = isStreaming
 
   useEffect(() => {
     return () => {
@@ -314,6 +319,7 @@ export function SetupWizard({ project, onComplete: rawOnComplete, onSkip: rawOnS
         logLines: logLinesRef.current,
         chatMessages: chatMessagesRef.current,
         sessionId: sessionIdRef.current,
+        isStreaming: isStreamingRef.current,
       })
     }
   }, [project.id])
@@ -333,9 +339,19 @@ export function SetupWizard({ project, onComplete: rawOnComplete, onSkip: rawOnS
           setSessionId(data.savedSessionId)
         }
 
-        // Update checkpoints from server
+        // Merge checkpoints from server — never regress a checkpoint that
+        // the client cache already marked as 'done' (guards against server
+        // restart returning all-pending while the wizard was mid-setup)
         if (data.checkpoints) {
-          setCheckpoints(data.checkpoints)
+          setCheckpoints((prev) =>
+            prev.map((cp) => {
+              const serverCp = data.checkpoints!.find((s: CheckpointState) => s.key === cp.key)
+              if (!serverCp) return cp
+              // Never regress from done → pending/running
+              if (cp.status === 'done' && serverCp.status !== 'done') return cp
+              return { ...cp, ...serverCp }
+            })
+          )
         }
 
         // Restore install log lines — use server buffer if it has more lines than
@@ -343,6 +359,11 @@ export function SetupWizard({ project, onComplete: rawOnComplete, onSkip: rawOnS
         // lines received while the tab was inactive)
         if (data.logLines && data.logLines.length > 0) {
           setLogLines((prev) => data.logLines!.length > prev.length ? data.logLines! : prev)
+        }
+
+        // If server says setup isn't actively running, clear stale streaming state
+        if (!data.isSettingUp && !data.isInstalling) {
+          setIsStreaming(false)
         }
 
         // If we were on 'installing' but install finished, advance to setup
@@ -542,6 +563,26 @@ export function SetupWizard({ project, onComplete: rawOnComplete, onSkip: rawOnS
   // startSetup is a stable function defined below; eslint-disable-next-line is intentional
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wizardStep.step])
+
+  // Safety timeout: if streaming for 30s with no new chunks, reset isStreaming
+  // so the chat input becomes usable again (guards against WS drops / stalled streams)
+  useEffect(() => {
+    if (!isStreaming) {
+      if (streamingTimeoutRef.current) {
+        clearTimeout(streamingTimeoutRef.current)
+        streamingTimeoutRef.current = null
+      }
+      return
+    }
+    // Reset the timer whenever streaming text changes
+    if (streamingTimeoutRef.current) clearTimeout(streamingTimeoutRef.current)
+    streamingTimeoutRef.current = setTimeout(() => {
+      setIsStreaming(false)
+    }, 30_000)
+    return () => {
+      if (streamingTimeoutRef.current) clearTimeout(streamingTimeoutRef.current)
+    }
+  }, [isStreaming, streamingText])
 
   // Commit streaming text to messages when streaming ends mid-turn.
   // setup_complete handles the final flush directly; this handles unexpected stream end.
