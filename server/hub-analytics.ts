@@ -438,6 +438,120 @@ export function getHubOverview(registry: ProjectRegistry, recentLimit = 15): Hub
   }
 }
 
+// ─── Project Health Dashboard ─────────────────────────────────────────────────
+
+export type HealthStatus = 'green' | 'yellow' | 'red'
+
+export interface ProjectHealth {
+  projectId: string
+  projectName: string
+  successRate24h: number
+  totalCost24h: number
+  pendingJobsCount: number
+  lastSuccessfulJobAt: string | null
+  healthStatus: HealthStatus
+}
+
+export interface HubHealthResponse {
+  projects: ProjectHealth[]
+  aggregated: {
+    totalCount: number
+    greenCount: number
+    yellowCount: number
+    redCount: number
+  }
+}
+
+function computeHealthStatus(
+  successRate: number,
+  pendingCount: number,
+  lastSuccessfulJobAt: string | null
+): HealthStatus {
+  const now = Date.now()
+  const lastSuccessAgo = lastSuccessfulJobAt
+    ? now - new Date(lastSuccessfulJobAt).getTime()
+    : Infinity
+  const oneDayMs = 24 * 60 * 60 * 1000
+
+  // Red: <60% success OR last success >24h ago
+  if (successRate < 0.6 || lastSuccessAgo > oneDayMs) return 'red'
+  // Yellow: 60-80% success OR >5 pending
+  if (successRate < 0.8 || pendingCount > 5) return 'yellow'
+  // Green: >80% success AND no excessive pending
+  return 'green'
+}
+
+function getProjectHealth(
+  projectId: string,
+  projectName: string,
+  db: DbInstance
+): ProjectHealth {
+  const now = new Date()
+  const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
+
+  // 24h job stats
+  const stats24h = db.prepare(`
+    SELECT
+      COUNT(*) as totalJobs,
+      SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as successCount,
+      COALESCE(SUM(total_cost_usd), 0) as totalCost
+    FROM jobs
+    WHERE started_at >= ?
+  `).get(oneDayAgo) as { totalJobs: number; successCount: number; totalCost: number }
+
+  // Pending jobs (queued + running)
+  const pendingRow = db.prepare(
+    `SELECT COUNT(*) as count FROM jobs WHERE status IN ('queued', 'running')`
+  ).get() as { count: number }
+
+  // Last successful job
+  const lastSuccess = db.prepare(
+    `SELECT finished_at FROM jobs WHERE status = 'completed' ORDER BY finished_at DESC LIMIT 1`
+  ).get() as { finished_at: string } | undefined
+
+  const successRate = stats24h.totalJobs > 0
+    ? stats24h.successCount / stats24h.totalJobs
+    : 1 // No jobs in 24h → neutral (but lastSuccessfulJobAt will trigger red if stale)
+
+  const lastSuccessfulJobAt = lastSuccess?.finished_at ?? null
+
+  return {
+    projectId,
+    projectName,
+    successRate24h: successRate,
+    totalCost24h: stats24h.totalCost,
+    pendingJobsCount: pendingRow.count,
+    lastSuccessfulJobAt,
+    healthStatus: computeHealthStatus(successRate, pendingRow.count, lastSuccessfulJobAt),
+  }
+}
+
+export function getHubHealth(registry: ProjectRegistry): HubHealthResponse {
+  const projects: ProjectHealth[] = []
+
+  for (const ctx of registry.listContexts()) {
+    projects.push(getProjectHealth(ctx.project.id, ctx.project.name, ctx.db))
+  }
+
+  const greenCount = projects.filter((p) => p.healthStatus === 'green').length
+  const yellowCount = projects.filter((p) => p.healthStatus === 'yellow').length
+  const redCount = projects.filter((p) => p.healthStatus === 'red').length
+
+  // Sort: red first, then yellow, then green
+  const statusOrder: Record<HealthStatus, number> = { red: 0, yellow: 1, green: 2 }
+  projects.sort((a, b) => statusOrder[a.healthStatus] - statusOrder[b.healthStatus])
+
+  return {
+    projects,
+    aggregated: {
+      totalCount: projects.length,
+      greenCount,
+      yellowCount,
+      redCount,
+    },
+  }
+}
+
 export function getHubTodayStats(registry: ProjectRegistry): HubTodayStats {
   const today = new Date().toISOString().slice(0, 10)
   const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10)

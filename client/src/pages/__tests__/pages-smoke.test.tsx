@@ -121,23 +121,22 @@ describe('HubOverviewPage', () => {
   })
 
   it('renders search results on query (debounced)', async () => {
-    ;(global.fetch as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          aggregated: { totalCount: 1, healthyCount: 1, warningCount: 0, criticalCount: 0, jobsToday: 3, activeJobs: 0 },
-          projects: [],
-          recentJobs: [],
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          query: 'test',
-          groups: [],
-          total: 0,
-        }),
-      })
+    const overviewData = {
+      aggregated: { totalCount: 1, healthyCount: 1, warningCount: 0, criticalCount: 0, jobsToday: 3, activeJobs: 0 },
+      projects: [],
+      recentJobs: [],
+    }
+    const healthData = { projects: [], aggregated: { totalCount: 0, greenCount: 0, yellowCount: 0, redCount: 0 } }
+    const searchData = { query: 'test', groups: [], total: 0 }
+    ;(global.fetch as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/api/hub/health')) {
+        return { ok: true, json: async () => healthData }
+      }
+      if (typeof url === 'string' && url.includes('/api/hub/search')) {
+        return { ok: true, json: async () => searchData }
+      }
+      return { ok: true, json: async () => overviewData }
+    })
 
     const HubOverviewPage = (await import('../HubOverviewPage')).default
     render(<HubOverviewPage />)

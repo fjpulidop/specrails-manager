@@ -9,7 +9,7 @@ import type { WebhookEvent } from './hub-db'
 import { WebhookManager } from './webhook-manager'
 import { createSpecrailsTechClient } from './specrails-tech-client'
 import { checkCoreCompat, getCLIStatus, detectAvailableCLIs } from './core-compat'
-import { getHubAnalytics, getHubTodayStats, getHubRecentJobs, searchHubContent, getHubOverview } from './hub-analytics'
+import { getHubAnalytics, getHubTodayStats, getHubRecentJobs, searchHubContent, getHubOverview, getHubHealth } from './hub-analytics'
 import type { AnalyticsOpts, AnalyticsPeriod } from './types'
 
 function slugify(name: string): string {
@@ -156,6 +156,12 @@ export function createHubRouter(
   // GET /api/hub/overview — per-project overview with health scores and aggregated stats
   router.get('/overview', (_req, res) => {
     const result = getHubOverview(registry)
+    res.json(result)
+  })
+
+  // GET /api/hub/health — per-project health with traffic light indicators
+  router.get('/health', (_req, res) => {
+    const result = getHubHealth(registry)
     res.json(result)
   })
 

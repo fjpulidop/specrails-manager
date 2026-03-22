@@ -206,6 +206,30 @@ export interface HubOverviewResponse {
   recentJobs: HubRecentJob[]
 }
 
+// ─── Project Health Dashboard ─────────────────────────────────────────────────
+
+export type HealthStatus = 'green' | 'yellow' | 'red'
+
+export interface ProjectHealth {
+  projectId: string
+  projectName: string
+  successRate24h: number
+  totalCost24h: number
+  pendingJobsCount: number
+  lastSuccessfulJobAt: string | null
+  healthStatus: HealthStatus
+}
+
+export interface HubHealthResponse {
+  projects: ProjectHealth[]
+  aggregated: {
+    totalCount: number
+    greenCount: number
+    yellowCount: number
+    redCount: number
+  }
+}
+
 export interface ChatConversationSummary {
   id: string
   title: string | null
