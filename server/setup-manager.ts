@@ -4,7 +4,15 @@ import { existsSync, readdirSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import treeKill from 'tree-kill'
 import type { WsMessage } from './types'
-import { findCoreContract, detectCLISync } from './core-compat'
+import { findCoreContract, detectCLISync, CLIProvider } from './core-compat'
+
+/**
+ * Return the project-level config directory for the given AI provider.
+ * Claude Code uses `.claude/`; Codex uses `.agents/`.
+ */
+function specrailsDir(provider?: CLIProvider | null): string {
+  return provider === 'codex' ? '.agents' : '.claude'
+}
 
 // ─── Checkpoint definitions ───────────────────────────────────────────────────
 
@@ -33,17 +41,18 @@ export interface CheckpointStatus {
   duration_ms?: number
 }
 
-function checkFilesystem(projectPath: string): Partial<Record<string, boolean>> {
+function checkFilesystem(projectPath: string, provider?: CLIProvider | null): Partial<Record<string, boolean>> {
+  const dir = specrailsDir(provider)
   const hasBaseInstall = existsSync(join(projectPath, '.specrails-version'))
-  const hasSetupTemplates = existsSync(join(projectPath, '.claude', 'setup-templates'))
-  const hasRules = existsSync(join(projectPath, '.claude', 'rules')) &&
-    hasFiles(join(projectPath, '.claude', 'rules'), /\.md$/)
-  const hasPersonas = existsSync(join(projectPath, '.claude', 'agents', 'personas')) &&
-    hasFiles(join(projectPath, '.claude', 'agents', 'personas'), /\.md$/)
-  const hasAgents = existsSync(join(projectPath, '.claude', 'agents')) &&
-    hasFiles(join(projectPath, '.claude', 'agents'), /^sr-.*\.md$/)
-  const hasCommands = existsSync(join(projectPath, '.claude', 'commands', 'sr')) &&
-    hasFiles(join(projectPath, '.claude', 'commands', 'sr'), /\.md$/)
+  const hasSetupTemplates = existsSync(join(projectPath, dir, 'setup-templates'))
+  const hasRules = existsSync(join(projectPath, dir, 'rules')) &&
+    hasFiles(join(projectPath, dir, 'rules'), /\.md$/)
+  const hasPersonas = existsSync(join(projectPath, dir, 'agents', 'personas')) &&
+    hasFiles(join(projectPath, dir, 'agents', 'personas'), /\.md$/)
+  const hasAgents = existsSync(join(projectPath, dir, 'agents')) &&
+    hasFiles(join(projectPath, dir, 'agents'), /^sr-.*\.md$/)
+  const hasCommands = existsSync(join(projectPath, dir, 'commands', 'sr')) &&
+    hasFiles(join(projectPath, dir, 'commands', 'sr'), /\.md$/)
   const hasCLAUDE = existsSync(join(projectPath, 'CLAUDE.md'))
 
   return {
@@ -123,13 +132,14 @@ export interface SetupSummary {
   commands: number
 }
 
-function computeSummary(projectPath: string): SetupSummary {
+function computeSummary(projectPath: string, provider?: CLIProvider | null): SetupSummary {
+  const dir = specrailsDir(provider)
   let agents = 0
   let personas = 0
   let commands = 0
 
   try {
-    const agentsDir = join(projectPath, '.claude', 'agents')
+    const agentsDir = join(projectPath, dir, 'agents')
     if (existsSync(agentsDir)) {
       const files = readdirSync(agentsDir) as string[]
       agents = files.filter((f) => /^sr-.*\.md$/.test(f)).length
@@ -138,7 +148,7 @@ function computeSummary(projectPath: string): SetupSummary {
         personas = (readdirSync(personasDir) as string[]).filter((f) => f.endsWith('.md')).length
       }
     }
-    const commandsDir = join(projectPath, '.claude', 'commands', 'sr')
+    const commandsDir = join(projectPath, dir, 'commands', 'sr')
     if (existsSync(commandsDir)) {
       commands = (readdirSync(commandsDir) as string[]).filter((f) => f.endsWith('.md')).length
     }
@@ -202,6 +212,8 @@ export class SetupManager {
   private _checkpointStart: Map<string, Map<string, number>>
   // Ring buffer for install log lines — allows clients to recover log on reconnect
   private _installLogBuffer: Map<string, string[]>
+  // Track each project's chosen AI provider for directory resolution
+  private _projectProviders: Map<string, CLIProvider>
 
   constructor(
     broadcast: (msg: WsMessage) => void,
@@ -217,6 +229,7 @@ export class SetupManager {
     this._checkpointStart = new Map()
     this._pollTimers = new Map()
     this._installLogBuffer = new Map()
+    this._projectProviders = new Map()
   }
 
   // ─── Install: npx specrails-core ─────────────────────────────────────────────
@@ -285,6 +298,8 @@ export class SetupManager {
       return
     }
 
+    if (provider) this._projectProviders.set(projectId, provider)
+
     this._initCheckpoints(projectId)
 
     // Pre-create the directory structure that /setup will write to.
@@ -292,10 +307,11 @@ export class SetupManager {
     // if a target directory doesn't exist the write fails and Claude reports a
     // misleading "write permissions aren't enabled" error.  Creating the dirs
     // here ensures setup runs transparently without any user intervention.
+    const dir = specrailsDir(provider)
     try {
-      mkdirSync(join(projectPath, '.claude', 'agents', 'personas'), { recursive: true })
-      mkdirSync(join(projectPath, '.claude', 'commands', 'sr'), { recursive: true })
-      mkdirSync(join(projectPath, '.claude', 'rules'), { recursive: true })
+      mkdirSync(join(projectPath, dir, 'agents', 'personas'), { recursive: true })
+      mkdirSync(join(projectPath, dir, 'commands', 'sr'), { recursive: true })
+      mkdirSync(join(projectPath, dir, 'rules'), { recursive: true })
     } catch (err) {
       console.warn(`[SetupManager] Failed to pre-create setup directories: ${err}`)
     }
@@ -315,6 +331,8 @@ export class SetupManager {
       console.warn(`[SetupManager] setup already running for ${projectId}`)
       return
     }
+
+    if (provider) this._projectProviders.set(projectId, provider)
 
     const args = [
       '--resume', sessionId,
@@ -433,14 +451,15 @@ export class SetupManager {
         this._syncFilesystemCheckpoints(projectId, projectPath)
 
         // Check if setup is truly complete — real artifacts must exist
-        const hasAgents = existsSync(join(projectPath, '.claude', 'agents')) &&
-          hasFiles(join(projectPath, '.claude', 'agents'), /^sr-.*\.md$/)
-        const hasCommands = existsSync(join(projectPath, '.claude', 'commands', 'sr')) &&
-          hasFiles(join(projectPath, '.claude', 'commands', 'sr'), /\.md$/)
+        const dir = specrailsDir(this._projectProviders.get(projectId))
+        const hasAgents = existsSync(join(projectPath, dir, 'agents')) &&
+          hasFiles(join(projectPath, dir, 'agents'), /^sr-.*\.md$/)
+        const hasCommands = existsSync(join(projectPath, dir, 'commands', 'sr')) &&
+          hasFiles(join(projectPath, dir, 'commands', 'sr'), /\.md$/)
         const isComplete = hasAgents && hasCommands
 
         if (isComplete) {
-          const summary = computeSummary(projectPath)
+          const summary = computeSummary(projectPath, this._projectProviders.get(projectId))
           this._onSetupDone?.(projectId)
           this._broadcast({
             type: 'setup_complete',
@@ -566,7 +585,7 @@ export class SetupManager {
     const statuses = this._checkpoints.get(projectId)
     if (!statuses) return
 
-    const fsChecks = checkFilesystem(projectPath)
+    const fsChecks = checkFilesystem(projectPath, this._projectProviders.get(projectId))
 
     for (const [key, exists] of Object.entries(fsChecks)) {
       if (!exists) continue
@@ -585,7 +604,8 @@ export class SetupManager {
 
   // ─── Checkpoint poll endpoint ─────────────────────────────────────────────────
 
-  getCheckpointStatus(projectId: string, projectPath: string): CheckpointStatus[] {
+  getCheckpointStatus(projectId: string, projectPath: string, provider?: 'claude' | 'codex'): CheckpointStatus[] {
+    if (provider) this._projectProviders.set(projectId, provider)
     // Sync from filesystem before returning
     this._syncFilesystemCheckpoints(projectId, projectPath)
 
@@ -606,6 +626,7 @@ export class SetupManager {
 
   abort(projectId: string): void {
     this._stopFilesystemPoll(projectId)
+    this._projectProviders.delete(projectId)
     this._onSetupDone?.(projectId)
 
     const installChild = this._installProcesses.get(projectId)

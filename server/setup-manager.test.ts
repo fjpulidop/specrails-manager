@@ -17,6 +17,7 @@ vi.mock('fs', async () => {
     ...actual,
     existsSync: vi.fn().mockReturnValue(false),
     readdirSync: vi.fn().mockReturnValue([]),
+    mkdirSync: vi.fn(),
   }
 })
 
@@ -28,7 +29,7 @@ vi.mock('./core-compat', () => ({
 
 import { spawn as mockSpawn } from 'child_process'
 import treeKill from 'tree-kill'
-import { existsSync, readdirSync } from 'fs'
+import { existsSync, readdirSync, mkdirSync } from 'fs'
 import { detectCLISync } from './core-compat'
 import { SetupManager, CHECKPOINTS } from './setup-manager'
 
@@ -276,6 +277,31 @@ describe('SetupManager', () => {
       expect(complete[0].summary).toBeDefined()
     })
 
+    it('broadcasts setup_complete with .agents dir when provider is codex', async () => {
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+
+      // Mock: agents and commands exist under .agents/ (Codex provider)
+      vi.mocked(existsSync).mockImplementation((p: any) => {
+        const s = String(p)
+        return s.includes('.agents/agents') || s.includes('.agents/commands/sr')
+      })
+      vi.mocked(readdirSync).mockImplementation((p: any) => {
+        const s = String(p)
+        if (s.includes('/agents') && !s.includes('personas')) return ['sr-developer.md'] as any
+        if (s.includes('/commands/sr')) return ['implement.md'] as any
+        return [] as any
+      })
+
+      sm.startSetup('p1', '/path/to/project', 'codex')
+      pushLine(child, JSON.stringify({ type: 'result', session_id: 'sess-codex' }))
+      await finishProcess(child, 0)
+
+      const complete = getBroadcastedByType(broadcast, 'setup_complete')
+      expect(complete).toHaveLength(1)
+      expect(complete[0].summary).toBeDefined()
+    })
+
     it('broadcasts setup_error on non-zero exit', async () => {
       const child = createMockChildProcess()
       vi.mocked(mockSpawn).mockReturnValue(child as any)
@@ -330,6 +356,32 @@ describe('SetupManager', () => {
       )
       // detectCLISync should not be called when provider is explicit
       expect(detectCLISync).not.toHaveBeenCalled()
+    })
+
+    it('pre-creates .agents directories when provider is codex', () => {
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+
+      sm.startSetup('p1', '/path/to/project', 'codex')
+
+      const mkdirCalls = vi.mocked(mkdirSync).mock.calls.map(([p]) => String(p))
+      expect(mkdirCalls.some((p) => p.includes('.agents/agents/personas'))).toBe(true)
+      expect(mkdirCalls.some((p) => p.includes('.agents/commands/sr'))).toBe(true)
+      expect(mkdirCalls.some((p) => p.includes('.agents/rules'))).toBe(true)
+      // Should NOT create .claude dirs
+      expect(mkdirCalls.some((p) => p.includes('.claude'))).toBe(false)
+    })
+
+    it('pre-creates .claude directories when provider is claude', () => {
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+
+      sm.startSetup('p1', '/path/to/project', 'claude')
+
+      const mkdirCalls = vi.mocked(mkdirSync).mock.calls.map(([p]) => String(p))
+      expect(mkdirCalls.some((p) => p.includes('.claude/agents/personas'))).toBe(true)
+      expect(mkdirCalls.some((p) => p.includes('.claude/commands/sr'))).toBe(true)
+      expect(mkdirCalls.some((p) => p.includes('.claude/rules'))).toBe(true)
     })
 
     it('uses explicit claude provider even when codex is detected in PATH', () => {
