@@ -279,7 +279,7 @@ export class SetupManager {
 
   // ─── Setup: claude -p "/setup" ───────────────────────────────────────────────
 
-  startSetup(projectId: string, projectPath: string): void {
+  startSetup(projectId: string, projectPath: string, provider?: 'claude' | 'codex'): void {
     if (this._setupProcesses.has(projectId)) {
       console.warn(`[SetupManager] setup already running for ${projectId}`)
       return
@@ -307,10 +307,10 @@ export class SetupManager {
       '--verbose',
     ]
 
-    this._spawnSetup(projectId, projectPath, args)
+    this._spawnSetup(projectId, projectPath, args, provider)
   }
 
-  resumeSetup(projectId: string, projectPath: string, sessionId: string, userMessage: string): void {
+  resumeSetup(projectId: string, projectPath: string, sessionId: string, userMessage: string, provider?: 'claude' | 'codex'): void {
     if (this._setupProcesses.has(projectId)) {
       console.warn(`[SetupManager] setup already running for ${projectId}`)
       return
@@ -324,7 +324,7 @@ export class SetupManager {
       '-p', userMessage,
     ]
 
-    this._spawnSetup(projectId, projectPath, args)
+    this._spawnSetup(projectId, projectPath, args, provider)
   }
 
   // Active filesystem poll timers per project
@@ -346,8 +346,9 @@ export class SetupManager {
     }
   }
 
-  private _spawnSetup(projectId: string, projectPath: string, args: string[]): void {
-    const provider = detectCLISync()
+  private _spawnSetup(projectId: string, projectPath: string, args: string[], projectProvider?: 'claude' | 'codex'): void {
+    // Use the project's chosen provider; only fall back to PATH detection if none was set
+    const provider = projectProvider ?? detectCLISync()
 
     let binary: string
     let resolvedArgs: string[]

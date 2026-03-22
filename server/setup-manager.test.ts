@@ -314,6 +314,38 @@ describe('SetupManager', () => {
         expect.any(Object)
       )
     })
+
+    it('uses explicit provider parameter over detectCLISync', () => {
+      // detectCLISync returns claude (the default mock) but we pass 'codex' explicitly
+      vi.mocked(detectCLISync).mockReturnValue('claude')
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+
+      sm.startSetup('p1', '/path/to/project', 'codex')
+
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'codex',
+        ['exec', '/setup'],
+        expect.objectContaining({ cwd: '/path/to/project' })
+      )
+      // detectCLISync should not be called when provider is explicit
+      expect(detectCLISync).not.toHaveBeenCalled()
+    })
+
+    it('uses explicit claude provider even when codex is detected in PATH', () => {
+      vi.mocked(detectCLISync).mockReturnValue('codex')
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+
+      sm.startSetup('p1', '/path/to/project', 'claude')
+
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'claude',
+        expect.arrayContaining(['-p', '/setup']),
+        expect.objectContaining({ cwd: '/path/to/project' })
+      )
+      expect(detectCLISync).not.toHaveBeenCalled()
+    })
   })
 
   // ─── resumeSetup ──────────────────────────────────────────────────────────
@@ -340,6 +372,21 @@ describe('SetupManager', () => {
       sm.resumeSetup('p1', '/path', 'sess-2', 'msg2')
 
       expect(mockSpawn).toHaveBeenCalledTimes(1)
+    })
+
+    it('uses explicit provider parameter for codex resume', () => {
+      vi.mocked(detectCLISync).mockReturnValue('claude')
+      const child = createMockChildProcess()
+      vi.mocked(mockSpawn).mockReturnValue(child as any)
+
+      sm.resumeSetup('p1', '/path', 'sess-abc', 'continue', 'codex')
+
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'codex',
+        ['exec', 'continue'],
+        expect.any(Object)
+      )
+      expect(detectCLISync).not.toHaveBeenCalled()
     })
   })
 
