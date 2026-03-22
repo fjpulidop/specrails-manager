@@ -25,6 +25,8 @@ export interface NewJob {
   command: string
   started_at: string
   priority?: JobPriority
+  depends_on_job_id?: string | null
+  pipeline_id?: string | null
 }
 
 export interface JobResult {
@@ -195,6 +197,17 @@ const MIGRATIONS: Migration[] = [
       ALTER TABLE jobs ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal';
     `)
   },
+
+  // Migration 8: job dependencies and pipelines
+  (db) => {
+    db.exec(`
+      ALTER TABLE jobs ADD COLUMN depends_on_job_id TEXT REFERENCES jobs(id);
+      ALTER TABLE jobs ADD COLUMN pipeline_id TEXT;
+      ALTER TABLE jobs ADD COLUMN skip_reason TEXT;
+      CREATE INDEX IF NOT EXISTS idx_jobs_depends_on ON jobs(depends_on_job_id);
+      CREATE INDEX IF NOT EXISTS idx_jobs_pipeline_id ON jobs(pipeline_id);
+    `)
+  },
 ]
 
 function applyMigrations(db: DbInstance): void {
@@ -250,8 +263,8 @@ export function initDb(dbPath: string): DbInstance {
 
 export function createJob(db: DbInstance, job: NewJob): void {
   db.prepare(
-    'INSERT INTO jobs (id, command, started_at, status, priority) VALUES (?, ?, ?, ?, ?)'
-  ).run(job.id, job.command, job.started_at, 'running', job.priority ?? 'normal')
+    'INSERT INTO jobs (id, command, started_at, status, priority, depends_on_job_id, pipeline_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(job.id, job.command, job.started_at, 'running', job.priority ?? 'normal', job.depends_on_job_id ?? null, job.pipeline_id ?? null)
 }
 
 export function finishJob(
@@ -601,6 +614,18 @@ export function updateTemplate(
 
 export function deleteTemplate(db: DbInstance, id: string): void {
   db.prepare('DELETE FROM job_templates WHERE id = ?').run(id)
+}
+
+export function skipJob(db: DbInstance, jobId: string, reason: string): void {
+  db.prepare(
+    `UPDATE jobs SET status = 'skipped', skip_reason = ?, finished_at = ? WHERE id = ?`
+  ).run(reason, new Date().toISOString(), jobId)
+}
+
+export function getPipelineJobs(db: DbInstance, pipelineId: string): JobRow[] {
+  return db.prepare(
+    'SELECT * FROM jobs WHERE pipeline_id = ? ORDER BY queue_position ASC, started_at ASC'
+  ).all(pipelineId) as JobRow[]
 }
 
 export function getStats(db: DbInstance): StatsRow {

@@ -33,7 +33,7 @@ export interface PhaseMessage {
   projectId?: string
 }
 
-export type JobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'canceled' | 'zombie_terminated'
+export type JobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'canceled' | 'zombie_terminated' | 'skipped'
 
 export type JobPriority = 'low' | 'normal' | 'high' | 'critical'
 
@@ -65,6 +65,9 @@ export interface JobRow {
   duration_ms: number | null
   duration_api_ms: number | null
   session_id: string | null
+  depends_on_job_id: string | null
+  pipeline_id: string | null
+  skip_reason: string | null
 }
 
 export interface EventRow {
@@ -238,6 +241,9 @@ export interface Job {
   startedAt: string | null
   finishedAt: string | null
   exitCode: number | null
+  dependsOnJobId: string | null
+  pipelineId: string | null
+  skipReason: string | null
 }
 
 export interface QueueMessage {
@@ -490,6 +496,13 @@ export interface HubDailyBudgetExceededMessage {
   queuePaused: boolean
 }
 
+export interface PipelineStatusMessage {
+  type: 'pipeline_status'
+  pipelineId: string
+  status: 'running' | 'completed' | 'failed'
+  projectId?: string
+}
+
 export type WsMessage =
   | LogMessage | PhaseMessage | InitMessage | QueueMessage | EventMessage
   | ChatStreamMessage | ChatDoneMessage | ChatErrorMessage
@@ -502,4 +515,5 @@ export type WsMessage =
   | ProposalIssueCreatedMessage | ProposalErrorMessage
   | SpecLauncherStreamMessage | SpecLauncherDoneMessage | SpecLauncherErrorMessage
   | CostAlertMessage | DailyBudgetExceededMessage | HubDailyBudgetExceededMessage
+  | PipelineStatusMessage
 

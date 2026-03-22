@@ -11,12 +11,14 @@ import { BatchImplementWizard } from '../components/BatchImplementWizard'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
+import { GitBranch } from 'lucide-react'
 import type { CommandInfo, JobSummary, JobTemplate } from '../types'
 import { getApiBase } from '../lib/api'
 import { useHub } from '../hooks/useHub'
 import { ProjectHealthWidget } from '../components/ProjectHealthWidget'
 import { TemplateLibrary } from '../components/TemplateLibrary'
 import { ExportDropdown } from '../components/ExportDropdown'
+import { PipelineBuilder } from '../components/PipelineBuilder'
 
 export default function DashboardPage() {
   const { activeProjectId } = useHub()
@@ -157,6 +159,18 @@ export default function DashboardPage() {
         )}
       </section>
 
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setWizardOpen('pipeline')}
+          className="text-xs"
+        >
+          <GitBranch className="w-3.5 h-3.5 mr-1.5" />
+          Create Pipeline
+        </Button>
+      </div>
+
       <section>
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
           Runbooks
@@ -194,6 +208,11 @@ export default function DashboardPage() {
       <BatchImplementWizard
         open={wizardOpen === 'batch-implement'}
         onClose={() => setWizardOpen(null)}
+      />
+      <PipelineBuilder
+        open={wizardOpen === 'pipeline'}
+        onClose={() => setWizardOpen(null)}
+        commands={commands}
       />
       {/* Proposal detail dialog */}
       <Dialog open={detailProposal !== null} onOpenChange={(o) => !o && setDetailProposal(null)}>

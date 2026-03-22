@@ -8,7 +8,7 @@ import {
   listJobs, getJob, getJobEvents, purgeJobs, getProjectActivity,
   createConversation, listConversations, getConversation,
   deleteConversation, updateConversation, getMessages,
-  getStats,
+  getStats, getPipelineJobs,
   createProposal, getProposal, listProposals, deleteProposal,
   createTemplate, listTemplates, getTemplate, updateTemplate, deleteTemplate,
 } from './db'
@@ -71,7 +71,7 @@ export function createProjectRouter(registry: ProjectRegistry): Router {
   // ─── Queue / Spawn routes ────────────────────────────────────────────────────
 
   router.post('/:projectId/spawn', (req: Request, res: Response) => {
-    const { command, priority } = req.body ?? {}
+    const { command, priority, dependsOnJobId, pipelineId } = req.body ?? {}
     if (!command || typeof command !== 'string' || !command.trim()) {
       res.status(400).json({ error: 'command is required' })
       return
@@ -81,7 +81,10 @@ export function createProjectRouter(registry: ProjectRegistry): Router {
       return
     }
     try {
-      const job = ctx(req).queueManager.enqueue(command, (priority as JobPriority) ?? 'normal')
+      const job = ctx(req).queueManager.enqueue(command, (priority as JobPriority) ?? 'normal', {
+        dependsOnJobId: dependsOnJobId || undefined,
+        pipelineId: pipelineId || undefined,
+      })
       const position = job.queuePosition ?? 0
       res.status(202).json({ jobId: job.id, position })
     } catch (err) {
@@ -92,6 +95,59 @@ export function createProjectRouter(registry: ProjectRegistry): Router {
         res.status(500).json({ error: 'Internal server error' })
       }
     }
+  })
+
+  // ─── Pipeline routes ──────────────────────────────────────────────────────────
+
+  router.post('/:projectId/pipelines', (req: Request, res: Response) => {
+    const { steps } = req.body ?? {}
+    if (!Array.isArray(steps) || steps.length === 0) {
+      res.status(400).json({ error: 'steps must be a non-empty array of { command: string }' })
+      return
+    }
+    for (const step of steps) {
+      if (!step.command || typeof step.command !== 'string' || !step.command.trim()) {
+        res.status(400).json({ error: 'Each step must have a non-empty command string' })
+        return
+      }
+    }
+    try {
+      const pipelineId = uuidv4()
+      const jobs: Array<{ jobId: string; command: string; position: number }> = []
+      let prevJobId: string | null = null
+
+      for (let i = 0; i < steps.length; i++) {
+        const job = ctx(req).queueManager.enqueue(steps[i].command, {
+          dependsOnJobId: prevJobId ?? undefined,
+          pipelineId,
+        })
+        jobs.push({ jobId: job.id, command: steps[i].command, position: job.queuePosition ?? i + 1 })
+        prevJobId = job.id
+      }
+
+      res.status(202).json({ pipelineId, jobs })
+    } catch (err) {
+      if (err instanceof ClaudeNotFoundError) {
+        res.status(400).json({ error: err.message })
+      } else {
+        console.error('[project-router] pipeline error:', err)
+        res.status(500).json({ error: 'Internal server error' })
+      }
+    }
+  })
+
+  router.get('/:projectId/pipelines/:pipelineId', (req: Request, res: Response) => {
+    const { db } = ctx(req)
+    const pipelineId = req.params.pipelineId as string
+    const jobs = getPipelineJobs(db, pipelineId)
+    if (jobs.length === 0) {
+      res.status(404).json({ error: 'Pipeline not found' })
+      return
+    }
+    const allCompleted = jobs.every(j => j.status === 'completed')
+    const anyFailed = jobs.some(j => ['failed', 'skipped', 'canceled', 'zombie_terminated'].includes(j.status))
+    const status = allCompleted ? 'completed' : anyFailed ? 'failed' : 'running'
+    res.json({ pipelineId, status, jobs })
   })
 
   router.get('/:projectId/state', (req: Request, res: Response) => {
@@ -869,11 +925,18 @@ export function createProjectRouter(registry: ProjectRegistry): Router {
     const row = getTemplate(db, req.params.templateId as string)
     if (!row) { res.status(404).json({ error: 'Template not found' }); return }
     const commands = JSON.parse(row.commands) as string[]
+    const chain = req.body?.chain !== false // default: chain jobs as pipeline
     const jobIds: string[] = []
     try {
+      const pipelineId = chain && commands.length > 1 ? uuidv4() : undefined
+      let prevJobId: string | null = null
       for (const command of commands) {
-        const job = queueManager.enqueue(command)
+        const job = queueManager.enqueue(command, {
+          dependsOnJobId: chain ? (prevJobId ?? undefined) : undefined,
+          pipelineId,
+        })
         jobIds.push(job.id)
+        prevJobId = job.id
       }
     } catch (err) {
       if (err instanceof ClaudeNotFoundError) {
