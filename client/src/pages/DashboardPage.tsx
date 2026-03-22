@@ -16,6 +16,7 @@ import { getApiBase } from '../lib/api'
 import { useHub } from '../hooks/useHub'
 import { ProjectHealthWidget } from '../components/ProjectHealthWidget'
 import { TemplateLibrary } from '../components/TemplateLibrary'
+import { ExportDropdown } from '../components/ExportDropdown'
 
 export default function DashboardPage() {
   const { activeProjectId } = useHub()
@@ -168,9 +169,15 @@ export default function DashboardPage() {
       </section>
 
       <section>
-        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-          Recent Jobs
-        </h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Recent Jobs
+          </h2>
+          <ExportDropdown
+            baseUrl={`${getApiBase()}/jobs/export`}
+            label="Export Jobs"
+          />
+        </div>
         <RecentJobs
           jobs={jobs}
           isLoading={isLoadingJobs}

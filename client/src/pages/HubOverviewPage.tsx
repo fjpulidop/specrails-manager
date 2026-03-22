@@ -3,6 +3,7 @@ import { Search, Activity, Layers, CheckCircle, AlertTriangle, XCircle, Clock, X
 import { formatDistanceToNow } from 'date-fns'
 import type { HubOverviewResponse, HubProjectOverview, HubRecentJob, HubSearchResponse, HubHealthResponse } from '../types'
 import { STATUS_COLORS } from '../lib/dracula-colors'
+import { ExportDropdown } from '../components/ExportDropdown'
 import { useHub } from '../hooks/useHub'
 import ProjectHealthGrid from '../components/ProjectHealthGrid'
 
@@ -408,6 +409,12 @@ export default function HubOverviewPage() {
         <div className="flex items-center gap-2">
           <Layers className="w-4 h-4 text-muted-foreground" />
           <h1 className="text-sm font-semibold">Hub Overview</h1>
+          <div className="ml-auto">
+            <ExportDropdown
+              baseUrl="/api/hub/export"
+              label="Export All"
+            />
+          </div>
         </div>
 
         {/* Search bar */}

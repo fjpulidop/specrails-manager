@@ -14,6 +14,7 @@ import { DailyThroughput } from '../components/analytics/DailyThroughput'
 import { CostTreemap } from '../components/analytics/CostTreemap'
 import { BonusMetrics } from '../components/analytics/BonusMetrics'
 import { TrendsChart } from '../components/analytics/TrendsChart'
+import { ExportDropdown } from '../components/ExportDropdown'
 
 function SkeletonGrid() {
   return (
@@ -149,7 +150,13 @@ export default function AnalyticsPage() {
             <p className="text-xs text-muted-foreground">{data.period.label}</p>
           )}
         </div>
-        <PeriodSelector period={period} from={from} to={to} onChange={handlePeriodChange} />
+        <div className="flex items-center gap-2">
+          <PeriodSelector period={period} from={from} to={to} onChange={handlePeriodChange} />
+          <ExportDropdown
+            baseUrl={`${getApiBase()}/analytics/export`}
+            params={{ period, ...(from ? { from } : {}), ...(to ? { to } : {}) }}
+          />
+        </div>
       </div>
 
       {loading && <SkeletonGrid />}

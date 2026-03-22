@@ -1025,4 +1025,51 @@ describe('hub-router', () => {
       expect(res.body.aggregated.greenCount).toBe(1)
     })
   })
+
+  // ─── Export ────────────────────────────────────────────────────────────────────
+
+  describe('GET /api/hub/export', () => {
+    it('returns JSON overview by default', async () => {
+      const { app } = createApp()
+      const res = await request(app).get('/api/hub/export')
+      expect(res.status).toBe(200)
+      expect(res.body).toHaveProperty('projects')
+      expect(res.body).toHaveProperty('aggregated')
+    })
+
+    it('returns CSV when format=csv', async () => {
+      const { app } = createApp()
+      const res = await request(app).get('/api/hub/export?format=csv')
+      expect(res.status).toBe(200)
+      expect(res.headers['content-type']).toContain('text/csv')
+      expect(res.headers['content-disposition']).toContain('hub-export.csv')
+      const lines = res.text.split('\n')
+      expect(lines[0]).toContain('projectName')
+      expect(lines[0]).toContain('healthScore')
+    })
+
+    it('returns 400 for invalid format', async () => {
+      const { app } = createApp()
+      const res = await request(app).get('/api/hub/export?format=xml')
+      expect(res.status).toBe(400)
+      expect(res.body.error).toContain('Invalid format')
+    })
+
+    it('CSV has headers even with no projects', async () => {
+      const { app } = createApp()
+      const res = await request(app).get('/api/hub/export?format=csv')
+      expect(res.status).toBe(200)
+      const lines = res.text.split('\n')
+      expect(lines.length).toBeGreaterThanOrEqual(1)
+      expect(lines[0]).toContain('projectName')
+    })
+
+    it('JSON includes aggregated stats', async () => {
+      const { app } = createApp()
+      const res = await request(app).get('/api/hub/export?format=json')
+      expect(res.status).toBe(200)
+      expect(res.body.projects).toBeInstanceOf(Array)
+      expect(res.body.aggregated).toBeDefined()
+    })
+  })
 })
