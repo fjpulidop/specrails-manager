@@ -38,10 +38,10 @@ import { ExportDropdown } from '../components/ExportDropdown'
 
 
 const SECTION_TITLES: Record<SectionId, string> = {
-  health: 'Project Health',
-  commands: 'Commands',
-  runbooks: 'Runbooks',
-  jobs: 'Recent Jobs',
+  health: 'Health',
+  commands: 'Spec',
+  rails: 'Rails',
+  jobs: 'Jobs',
 }
 
 export default function DashboardPage() {
@@ -213,7 +213,7 @@ export default function DashboardPage() {
             </div>
           </>
         )
-      case 'runbooks':
+      case 'rails':
         return (
           <TemplateLibrary
             templates={templates}

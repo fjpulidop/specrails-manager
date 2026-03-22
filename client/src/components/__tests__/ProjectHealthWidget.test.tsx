@@ -118,7 +118,7 @@ describe('ProjectHealthWidget', () => {
   it('renders health content when metrics are available (heading now in CollapsibleSection)', () => {
     mockData = mockMetrics
     render(<ProjectHealthWidget />)
-    // The "Project Health" heading was moved to CollapsibleSection
+    // The "Health" heading was moved to CollapsibleSection
     // Verify health content renders (score, factors, etc.)
     expect(screen.getByText('75')).toBeInTheDocument()
     expect(screen.getByText('health')).toBeInTheDocument()

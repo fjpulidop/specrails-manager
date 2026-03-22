@@ -92,7 +92,8 @@ const DELIVERY_ORDER  = ['implement', 'batch-implement'] as const
 const DISCOVERY_SET   = new Set<string>(DISCOVERY_ORDER)
 const DELIVERY_SET    = new Set<string>(DELIVERY_ORDER)
 const DISPLAY_NAMES: Record<string, string> = {
-  'update-product-driven-backlog': 'Auto-propose Specs',
+  'propose-spec': 'Custom-Propose',
+  'update-product-driven-backlog': 'Auto-propose',
   'product-backlog': 'Auto-Select Specs',
 }
 const HIDDEN_SLUGS = new Set(['propose-feature'])

@@ -115,7 +115,7 @@ export function CreateTemplateDialog({ open, template, commands = [], onClose, o
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">Description (optional)</label>
             <Input
-              placeholder="What does this runbook do?"
+              placeholder="What does this rail do?"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               disabled={submitting}

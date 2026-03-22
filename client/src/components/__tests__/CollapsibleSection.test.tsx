@@ -24,7 +24,7 @@ function renderInDndContext(ui: React.ReactElement) {
 describe('CollapsibleSection', () => {
   const defaultProps = {
     id: 'health' as const,
-    title: 'Project Health',
+    title: 'Health',
     expanded: false,
     pinned: false,
     onToggleExpand: vi.fn(),
@@ -34,7 +34,7 @@ describe('CollapsibleSection', () => {
 
   it('renders the section title', () => {
     renderInDndContext(<CollapsibleSection {...defaultProps} />)
-    expect(screen.getByText('Project Health')).toBeInTheDocument()
+    expect(screen.getByText('Health')).toBeInTheDocument()
   })
 
   it('renders the section test id', () => {

@@ -98,7 +98,7 @@ export function createProjectRouter(registry: ProjectRegistry): Router {
   })
 
   // ─── Pipeline routes ──────────────────────────────────────────────────────────
-  // NOTE: Ad-hoc pipeline creation removed — use runbooks (templates) instead.
+  // NOTE: Ad-hoc pipeline creation removed — use rails (templates) instead.
   // The GET route remains for viewing existing pipeline status.
 
   router.get('/:projectId/pipelines/:pipelineId', (req: Request, res: Response) => {

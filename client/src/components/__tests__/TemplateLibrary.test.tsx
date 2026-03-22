@@ -300,7 +300,7 @@ describe('TemplateLibrary', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
 
     // Fill in name and command
-    await user.type(screen.getByPlaceholderText('e.g. Full pipeline'), 'My Runbook')
+    await user.type(screen.getByPlaceholderText('e.g. Full pipeline'), 'My Rail')
     await user.type(screen.getByPlaceholderText('Select a command or type a free prompt...'), '/sr:implement #1')
 
     // Submit
