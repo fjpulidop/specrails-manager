@@ -623,7 +623,7 @@ export function createProjectRouter(registry: ProjectRegistry): Router {
 
   router.get('/:projectId/setup/checkpoints', (req: Request, res: Response) => {
     const { project, setupManager } = ctx(req)
-    const checkpoints = setupManager.getCheckpointStatus(project.id, project.path)
+    const checkpoints = setupManager.getCheckpointStatus(project.id, project.path, project.provider)
     const savedSessionId = getProjectSetupSession(registry.hubDb, project.id)
     res.json({
       checkpoints,
