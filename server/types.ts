@@ -244,6 +244,7 @@ export interface Job {
   dependsOnJobId: string | null
   pipelineId: string | null
   skipReason: string | null
+  resultText: string | null
 }
 
 export interface QueueMessage {

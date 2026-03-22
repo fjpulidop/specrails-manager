@@ -301,7 +301,7 @@ describe('TemplateLibrary', () => {
 
     // Fill in name and command
     await user.type(screen.getByPlaceholderText('e.g. Full pipeline'), 'My Runbook')
-    await user.type(screen.getByPlaceholderText('/sr:implement #42'), '/sr:implement #1')
+    await user.type(screen.getByPlaceholderText('Select a command or type a free prompt...'), '/sr:implement #1')
 
     // Submit
     await user.click(screen.getByRole('button', { name: /Create/i }))

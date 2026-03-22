@@ -4,7 +4,7 @@ import path from 'path'
 import fs from 'fs'
 import type { WsMessage } from './types'
 import type { ProjectRegistry } from './project-registry'
-import { getHubSetting, setHubSetting, listProjects, listAgents, getAgent, addAgent, updateAgent, listWebhooks, getWebhook, addWebhook, updateWebhook, removeWebhook } from './hub-db'
+import { getHubSetting, setHubSetting, listProjects, listAgents, getAgent, addAgent, updateAgent, listWebhooks, getWebhook, addWebhook, updateWebhook, removeWebhook, getProjectSetupSession } from './hub-db'
 import type { WebhookEvent } from './hub-db'
 import { WebhookManager } from './webhook-manager'
 import { createSpecrailsTechClient } from './specrails-tech-client'
@@ -46,7 +46,21 @@ export function createHubRouter(
   // GET /api/hub/projects — list all registered projects
   router.get('/projects', (_req, res) => {
     const projects = listProjects(registry.hubDb)
-    res.json({ projects })
+    // Detect projects that are currently in the setup wizard so the client
+    // can restore the wizard after a page refresh.
+    const setupProjectIds: string[] = []
+    for (const p of projects) {
+      const ctx = registry.getContext(p.id)
+      if (!ctx) continue
+      const installing = ctx.setupManager.isInstalling(p.id)
+      const settingUp = ctx.setupManager.isSettingUp(p.id)
+      const hasSession = !!getProjectSetupSession(registry.hubDb, p.id)
+      const specrailsInstalled = hasSpecrails(p.path)
+      if (installing || settingUp || (hasSession && !specrailsInstalled)) {
+        setupProjectIds.push(p.id)
+      }
+    }
+    res.json({ projects, setupProjectIds })
   })
 
   // GET /api/hub/available-providers — which AI CLIs are installed

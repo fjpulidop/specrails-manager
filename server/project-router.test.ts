@@ -1178,70 +1178,7 @@ describe('project-router', () => {
   })
 
   // ─── Pipeline routes ─────────────────────────────────────────────────────
-
-  describe('POST /:projectId/pipelines', () => {
-    it('returns 400 when steps is missing', async () => {
-      const ctx = makeContext(db)
-      const { app } = createApp(new Map([['proj-1', ctx]]))
-      const res = await request(app).post('/api/projects/proj-1/pipelines').send({})
-      expect(res.status).toBe(400)
-      expect(res.body.error).toContain('steps must be a non-empty array')
-    })
-
-    it('returns 400 when steps is an empty array', async () => {
-      const ctx = makeContext(db)
-      const { app } = createApp(new Map([['proj-1', ctx]]))
-      const res = await request(app).post('/api/projects/proj-1/pipelines').send({ steps: [] })
-      expect(res.status).toBe(400)
-    })
-
-    it('returns 400 when a step has no command', async () => {
-      const ctx = makeContext(db)
-      const { app } = createApp(new Map([['proj-1', ctx]]))
-      const res = await request(app)
-        .post('/api/projects/proj-1/pipelines')
-        .send({ steps: [{ command: 'valid' }, { command: '' }] })
-      expect(res.status).toBe(400)
-      expect(res.body.error).toContain('non-empty command')
-    })
-
-    it('returns 202 with pipelineId and jobs on success', async () => {
-      const enqueue = vi.fn()
-        .mockReturnValueOnce({ id: 'j1', queuePosition: 0 })
-        .mockReturnValueOnce({ id: 'j2', queuePosition: 1 })
-      const qm = makeQueueManager({ enqueue })
-      const ctx = makeContext(db, { queueManager: qm as any })
-      const { app } = createApp(new Map([['proj-1', ctx]]))
-      const res = await request(app)
-        .post('/api/projects/proj-1/pipelines')
-        .send({ steps: [{ command: 'sr:test' }, { command: 'sr:build' }] })
-      expect(res.status).toBe(202)
-      expect(res.body.pipelineId).toBeTruthy()
-      expect(res.body.jobs).toHaveLength(2)
-      expect(res.body.jobs[0].jobId).toBe('j1')
-      expect(res.body.jobs[1].jobId).toBe('j2')
-    })
-
-    it('returns 400 when Claude not found during pipeline creation', async () => {
-      const qm = makeQueueManager({ enqueue: vi.fn(() => { throw new ClaudeNotFoundError() }) })
-      const ctx = makeContext(db, { queueManager: qm as any })
-      const { app } = createApp(new Map([['proj-1', ctx]]))
-      const res = await request(app)
-        .post('/api/projects/proj-1/pipelines')
-        .send({ steps: [{ command: 'sr:test' }] })
-      expect(res.status).toBe(400)
-    })
-
-    it('returns 500 on unexpected error during pipeline creation', async () => {
-      const qm = makeQueueManager({ enqueue: vi.fn(() => { throw new Error('boom') }) })
-      const ctx = makeContext(db, { queueManager: qm as any })
-      const { app } = createApp(new Map([['proj-1', ctx]]))
-      const res = await request(app)
-        .post('/api/projects/proj-1/pipelines')
-        .send({ steps: [{ command: 'sr:test' }] })
-      expect(res.status).toBe(500)
-    })
-  })
+  // NOTE: POST /pipelines removed — ad-hoc pipeline creation consolidated into runbooks (templates).
 
   describe('GET /:projectId/pipelines/:pipelineId', () => {
     it('returns 404 for unknown pipeline', async () => {

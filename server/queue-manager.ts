@@ -194,6 +194,7 @@ export class QueueManager {
       dependsOnJobId: resolvedOpts?.dependsOnJobId ?? null,
       pipelineId: resolvedOpts?.pipelineId ?? null,
       skipReason: null,
+      resultText: null,
     }
 
     this._jobs.set(id, job)
@@ -390,8 +391,19 @@ export class QueueManager {
       resetPhases(this._broadcast)
     }
 
-    const trimmedCommand = job.command.trim()
-    const resolvedCmd = this._resolveCommand(trimmedCommand)
+    let commandToRun = job.command.trim()
+    // Output chaining: inject previous step's output as context for dependent jobs
+    if (job.dependsOnJobId) {
+      const parentJob = this._jobs.get(job.dependsOnJobId)
+      if (parentJob?.resultText) {
+        const prevOutput = parentJob.resultText
+        const truncated = prevOutput.length > 10000
+          ? prevOutput.slice(0, 10000) + '\n\n[output truncated]'
+          : prevOutput
+        commandToRun = `Previous step output:\n\n${truncated}\n\n---\n\nNow execute the following:\n${commandToRun}`
+      }
+    }
+    const resolvedCmd = this._resolveCommand(commandToRun)
 
     let binary: string
     let args: string[]
@@ -559,6 +571,11 @@ export class QueueManager {
     job.status = finalStatus
     job.finishedAt = new Date().toISOString()
     job.exitCode = code
+
+    // Capture result text for output chaining between pipeline steps
+    if (lastResultEvent && typeof lastResultEvent.result === 'string') {
+      job.resultText = lastResultEvent.result
+    }
 
     this._activeProcess = null
     this._activeJobId = null
@@ -795,6 +812,7 @@ export class QueueManager {
           dependsOnJobId: row.depends_on_job_id ?? null,
           pipelineId: row.pipeline_id ?? null,
           skipReason: null,
+          resultText: null,
         }
         this._jobs.set(row.id, job)
         this._queue.push(row.id)
