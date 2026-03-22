@@ -1,18 +1,17 @@
 import { spawn, ChildProcess } from 'child_process'
 import { createInterface } from 'readline'
-import { existsSync, readdirSync, mkdirSync } from 'fs'
+import { existsSync, readdirSync, mkdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 import treeKill from 'tree-kill'
 import type { WsMessage } from './types'
 import { findCoreContract, detectCLISync, CLIProvider } from './core-compat'
 
 /**
- * Return the project-level config directory for the given AI provider.
- * Claude Code uses `.claude/`; Codex uses `.agents/`.
+ * specrails-core's install.sh always scaffolds into `.claude/` regardless of
+ * which AI CLI the project uses.  The provider choice affects which binary
+ * runs (claude vs codex), not where the framework files live.
  */
-function specrailsDir(provider?: CLIProvider | null): string {
-  return provider === 'codex' ? '.agents' : '.claude'
-}
+const SPECRAILS_DIR = '.claude'
 
 // ─── Checkpoint definitions ───────────────────────────────────────────────────
 
@@ -41,8 +40,8 @@ export interface CheckpointStatus {
   duration_ms?: number
 }
 
-function checkFilesystem(projectPath: string, provider?: CLIProvider | null): Partial<Record<string, boolean>> {
-  const dir = specrailsDir(provider)
+function checkFilesystem(projectPath: string): Partial<Record<string, boolean>> {
+  const dir = SPECRAILS_DIR
   const hasBaseInstall = existsSync(join(projectPath, '.specrails-version'))
   const hasSetupTemplates = existsSync(join(projectPath, dir, 'setup-templates'))
   const hasRules = existsSync(join(projectPath, dir, 'rules')) &&
@@ -132,8 +131,8 @@ export interface SetupSummary {
   commands: number
 }
 
-function computeSummary(projectPath: string, provider?: CLIProvider | null): SetupSummary {
-  const dir = specrailsDir(provider)
+function computeSummary(projectPath: string): SetupSummary {
+  const dir = SPECRAILS_DIR
   let agents = 0
   let personas = 0
   let commands = 0
@@ -212,7 +211,7 @@ export class SetupManager {
   private _checkpointStart: Map<string, Map<string, number>>
   // Ring buffer for install log lines — allows clients to recover log on reconnect
   private _installLogBuffer: Map<string, string[]>
-  // Track each project's chosen AI provider for directory resolution
+  // Track each project's chosen AI provider for binary selection
   private _projectProviders: Map<string, CLIProvider>
 
   constructor(
@@ -307,11 +306,10 @@ export class SetupManager {
     // if a target directory doesn't exist the write fails and Claude reports a
     // misleading "write permissions aren't enabled" error.  Creating the dirs
     // here ensures setup runs transparently without any user intervention.
-    const dir = specrailsDir(provider)
     try {
-      mkdirSync(join(projectPath, dir, 'agents', 'personas'), { recursive: true })
-      mkdirSync(join(projectPath, dir, 'commands', 'sr'), { recursive: true })
-      mkdirSync(join(projectPath, dir, 'rules'), { recursive: true })
+      mkdirSync(join(projectPath, SPECRAILS_DIR, 'agents', 'personas'), { recursive: true })
+      mkdirSync(join(projectPath, SPECRAILS_DIR, 'commands', 'sr'), { recursive: true })
+      mkdirSync(join(projectPath, SPECRAILS_DIR, 'rules'), { recursive: true })
     } catch (err) {
       console.warn(`[SetupManager] Failed to pre-create setup directories: ${err}`)
     }
@@ -367,14 +365,27 @@ export class SetupManager {
   private _spawnSetup(projectId: string, projectPath: string, args: string[], projectProvider?: 'claude' | 'codex'): void {
     // Use the project's chosen provider; only fall back to PATH detection if none was set
     const provider = projectProvider ?? detectCLISync()
+    const isCodex = provider === 'codex'
 
     let binary: string
     let resolvedArgs: string[]
-    if (provider === 'codex') {
-      // Codex: extract the prompt value from claude-style args and use 'exec'
+    if (isCodex) {
+      // Codex doesn't share Claude Code's custom-command system — "/setup" is
+      // just literal text.  Read the setup command file installed by specrails-core
+      // and pass its full content as the prompt so Codex gets the real instructions.
       binary = 'codex'
       const promptIdx = args.indexOf('-p')
-      const prompt = promptIdx >= 0 ? args[promptIdx + 1] : '/setup'
+      let prompt = promptIdx >= 0 ? args[promptIdx + 1] : '/setup'
+
+      if (prompt === '/setup') {
+        const setupMdPath = join(projectPath, SPECRAILS_DIR, 'commands', 'setup.md')
+        try {
+          prompt = readFileSync(setupMdPath, 'utf-8')
+        } catch {
+          console.warn(`[SetupManager] Could not read ${setupMdPath} — falling back to literal /setup prompt`)
+        }
+      }
+
       resolvedArgs = ['exec', prompt]
     } else {
       // Default to claude (also covers null — warns and tries claude as fallback)
@@ -403,6 +414,20 @@ export class SetupManager {
     const stderrReader = createInterface({ input: child.stderr!, crlfDelay: Infinity })
 
     stdoutReader.on('line', (line) => {
+      if (isCodex) {
+        // Codex outputs plain text — broadcast as log and run checkpoint detection
+        if (line) {
+          this._broadcast({ type: 'setup_log', projectId, line, stream: 'stdout' })
+          this._broadcast({ type: 'setup_chat', projectId, text: line + '\n', role: 'assistant' })
+          const hits = detectCheckpointFromText(line)
+          for (const hit of hits) {
+            this._advanceCheckpoint(projectId, hit.key, hit.detail)
+          }
+        }
+        return
+      }
+
+      // Claude: parse stream-json output
       let parsed: Record<string, unknown> | null = null
       try { parsed = JSON.parse(line) } catch { /* plain text */ }
 
@@ -451,15 +476,14 @@ export class SetupManager {
         this._syncFilesystemCheckpoints(projectId, projectPath)
 
         // Check if setup is truly complete — real artifacts must exist
-        const dir = specrailsDir(this._projectProviders.get(projectId))
-        const hasAgents = existsSync(join(projectPath, dir, 'agents')) &&
-          hasFiles(join(projectPath, dir, 'agents'), /^sr-.*\.md$/)
-        const hasCommands = existsSync(join(projectPath, dir, 'commands', 'sr')) &&
-          hasFiles(join(projectPath, dir, 'commands', 'sr'), /\.md$/)
+        const hasAgents = existsSync(join(projectPath, SPECRAILS_DIR, 'agents')) &&
+          hasFiles(join(projectPath, SPECRAILS_DIR, 'agents'), /^sr-.*\.md$/)
+        const hasCommands = existsSync(join(projectPath, SPECRAILS_DIR, 'commands', 'sr')) &&
+          hasFiles(join(projectPath, SPECRAILS_DIR, 'commands', 'sr'), /\.md$/)
         const isComplete = hasAgents && hasCommands
 
         if (isComplete) {
-          const summary = computeSummary(projectPath, this._projectProviders.get(projectId))
+          const summary = computeSummary(projectPath)
           this._onSetupDone?.(projectId)
           this._broadcast({
             type: 'setup_complete',
@@ -585,7 +609,7 @@ export class SetupManager {
     const statuses = this._checkpoints.get(projectId)
     if (!statuses) return
 
-    const fsChecks = checkFilesystem(projectPath, this._projectProviders.get(projectId))
+    const fsChecks = checkFilesystem(projectPath)
 
     for (const [key, exists] of Object.entries(fsChecks)) {
       if (!exists) continue
@@ -604,8 +628,7 @@ export class SetupManager {
 
   // ─── Checkpoint poll endpoint ─────────────────────────────────────────────────
 
-  getCheckpointStatus(projectId: string, projectPath: string, provider?: 'claude' | 'codex'): CheckpointStatus[] {
-    if (provider) this._projectProviders.set(projectId, provider)
+  getCheckpointStatus(projectId: string, projectPath: string): CheckpointStatus[] {
     // Sync from filesystem before returning
     this._syncFilesystemCheckpoints(projectId, projectPath)
 

@@ -18,6 +18,7 @@ vi.mock('fs', async () => {
     existsSync: vi.fn().mockReturnValue(false),
     readdirSync: vi.fn().mockReturnValue([]),
     mkdirSync: vi.fn(),
+    readFileSync: vi.fn().mockReturnValue('# Setup prompt content'),
   }
 })
 
@@ -29,7 +30,7 @@ vi.mock('./core-compat', () => ({
 
 import { spawn as mockSpawn } from 'child_process'
 import treeKill from 'tree-kill'
-import { existsSync, readdirSync, mkdirSync } from 'fs'
+import { existsSync, readdirSync, mkdirSync, readFileSync } from 'fs'
 import { detectCLISync } from './core-compat'
 import { SetupManager, CHECKPOINTS } from './setup-manager'
 
@@ -277,14 +278,14 @@ describe('SetupManager', () => {
       expect(complete[0].summary).toBeDefined()
     })
 
-    it('broadcasts setup_complete with .agents dir when provider is codex', async () => {
+    it('broadcasts setup_complete with .claude dir when provider is codex', async () => {
       const child = createMockChildProcess()
       vi.mocked(mockSpawn).mockReturnValue(child as any)
 
-      // Mock: agents and commands exist under .agents/ (Codex provider)
+      // Mock: agents and commands exist under .claude/ (specrails always uses .claude)
       vi.mocked(existsSync).mockImplementation((p: any) => {
         const s = String(p)
-        return s.includes('.agents/agents') || s.includes('.agents/commands/sr')
+        return s.includes('.claude/agents') || s.includes('.claude/commands/sr')
       })
       vi.mocked(readdirSync).mockImplementation((p: any) => {
         const s = String(p)
@@ -294,7 +295,8 @@ describe('SetupManager', () => {
       })
 
       sm.startSetup('p1', '/path/to/project', 'codex')
-      pushLine(child, JSON.stringify({ type: 'result', session_id: 'sess-codex' }))
+      // Codex outputs plain text, not JSON — push a plain text line
+      pushLine(child, 'Setup complete')
       await finishProcess(child, 0)
 
       const complete = getBroadcastedByType(broadcast, 'setup_complete')
@@ -313,16 +315,21 @@ describe('SetupManager', () => {
       expect(errors).toHaveLength(1)
     })
 
-    it('spawns codex with exec /setup when codex is the detected CLI', () => {
+    it('spawns codex with setup.md content when codex is the detected CLI', () => {
       vi.mocked(detectCLISync).mockReturnValue('codex')
+      vi.mocked(readFileSync).mockReturnValue('# Full setup instructions')
       const child = createMockChildProcess()
       vi.mocked(mockSpawn).mockReturnValue(child as any)
 
       sm.startSetup('p1', '/path/to/project')
 
+      expect(readFileSync).toHaveBeenCalledWith(
+        expect.stringContaining('.claude/commands/setup.md'),
+        'utf-8'
+      )
       expect(mockSpawn).toHaveBeenCalledWith(
         'codex',
-        ['exec', '/setup'],
+        ['exec', '# Full setup instructions'],
         expect.objectContaining({ cwd: '/path/to/project' })
       )
     })
@@ -344,6 +351,7 @@ describe('SetupManager', () => {
     it('uses explicit provider parameter over detectCLISync', () => {
       // detectCLISync returns claude (the default mock) but we pass 'codex' explicitly
       vi.mocked(detectCLISync).mockReturnValue('claude')
+      vi.mocked(readFileSync).mockReturnValue('# Setup')
       const child = createMockChildProcess()
       vi.mocked(mockSpawn).mockReturnValue(child as any)
 
@@ -351,34 +359,21 @@ describe('SetupManager', () => {
 
       expect(mockSpawn).toHaveBeenCalledWith(
         'codex',
-        ['exec', '/setup'],
+        ['exec', '# Setup'],
         expect.objectContaining({ cwd: '/path/to/project' })
       )
       // detectCLISync should not be called when provider is explicit
       expect(detectCLISync).not.toHaveBeenCalled()
     })
 
-    it('pre-creates .agents directories when provider is codex', () => {
+    it('always pre-creates .claude directories regardless of provider', () => {
       const child = createMockChildProcess()
       vi.mocked(mockSpawn).mockReturnValue(child as any)
 
       sm.startSetup('p1', '/path/to/project', 'codex')
 
       const mkdirCalls = vi.mocked(mkdirSync).mock.calls.map(([p]) => String(p))
-      expect(mkdirCalls.some((p) => p.includes('.agents/agents/personas'))).toBe(true)
-      expect(mkdirCalls.some((p) => p.includes('.agents/commands/sr'))).toBe(true)
-      expect(mkdirCalls.some((p) => p.includes('.agents/rules'))).toBe(true)
-      // Should NOT create .claude dirs
-      expect(mkdirCalls.some((p) => p.includes('.claude'))).toBe(false)
-    })
-
-    it('pre-creates .claude directories when provider is claude', () => {
-      const child = createMockChildProcess()
-      vi.mocked(mockSpawn).mockReturnValue(child as any)
-
-      sm.startSetup('p1', '/path/to/project', 'claude')
-
-      const mkdirCalls = vi.mocked(mkdirSync).mock.calls.map(([p]) => String(p))
+      // specrails-core always installs to .claude/ — both providers use .claude
       expect(mkdirCalls.some((p) => p.includes('.claude/agents/personas'))).toBe(true)
       expect(mkdirCalls.some((p) => p.includes('.claude/commands/sr'))).toBe(true)
       expect(mkdirCalls.some((p) => p.includes('.claude/rules'))).toBe(true)
@@ -431,11 +426,12 @@ describe('SetupManager', () => {
       const child = createMockChildProcess()
       vi.mocked(mockSpawn).mockReturnValue(child as any)
 
-      sm.resumeSetup('p1', '/path', 'sess-abc', 'continue', 'codex')
+      sm.resumeSetup('p1', '/path', 'sess-abc', 'continue please', 'codex')
 
+      // Resume with Codex passes user message directly (not /setup)
       expect(mockSpawn).toHaveBeenCalledWith(
         'codex',
-        ['exec', 'continue'],
+        ['exec', 'continue please'],
         expect.any(Object)
       )
       expect(detectCLISync).not.toHaveBeenCalled()
