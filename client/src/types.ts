@@ -1,4 +1,4 @@
-export type JobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'canceled' | 'zombie_terminated'
+export type JobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'canceled' | 'zombie_terminated' | 'skipped'
 
 export type JobPriority = 'low' | 'normal' | 'high' | 'critical'
 
@@ -23,6 +23,9 @@ export interface JobSummary {
   tokens_cache_read?: number | null
   tokens_cache_create?: number | null
   num_turns?: number | null
+  depends_on_job_id?: string | null
+  pipeline_id?: string | null
+  skip_reason?: string | null
 }
 
 export interface EventRow {

@@ -6,7 +6,7 @@ import type { WsMessage, LogMessage, Job, PhaseDefinition, JobPriority } from '.
 import { PRIORITY_WEIGHT, VALID_PRIORITIES } from './types'
 import { resolveCommand } from './command-resolver'
 import { resetPhases, setActivePhases } from './hooks'
-import { createJob, finishJob, appendEvent } from './db'
+import { createJob, finishJob, appendEvent, skipJob } from './db'
 import type { JobResult } from './db'
 import type { CommandInfo } from './config'
 
@@ -84,7 +84,12 @@ function extractDisplayText(event: Record<string, unknown>): string | null {
   return null
 }
 
-const TERMINAL_STATUSES = new Set(['completed', 'failed', 'canceled', 'zombie_terminated'])
+const TERMINAL_STATUSES = new Set(['completed', 'failed', 'canceled', 'zombie_terminated', 'skipped'])
+
+export interface EnqueueOptions {
+  dependsOnJobId?: string
+  pipelineId?: string
+}
 
 // ─── QueueManager ─────────────────────────────────────────────────────────────
 
@@ -160,7 +165,16 @@ export class QueueManager {
 
   // ─── Public API ─────────────────────────────────────────────────────────────
 
-  enqueue(command: string, priority: JobPriority = 'normal'): Job {
+  enqueue(command: string, priorityOrOpts?: JobPriority | EnqueueOptions, opts?: EnqueueOptions): Job {
+    // Support both: enqueue(cmd, priority, opts) and enqueue(cmd, opts)
+    let priority: JobPriority = 'normal'
+    let resolvedOpts: EnqueueOptions | undefined = opts
+    if (typeof priorityOrOpts === 'string') {
+      priority = priorityOrOpts
+    } else if (priorityOrOpts && typeof priorityOrOpts === 'object') {
+      resolvedOpts = priorityOrOpts
+    }
+
     if (this._provider === 'codex') {
       if (!codexOnPath()) throw new CodexNotFoundError()
     } else {
@@ -177,6 +191,9 @@ export class QueueManager {
       startedAt: null,
       finishedAt: null,
       exitCode: null,
+      dependsOnJobId: resolvedOpts?.dependsOnJobId ?? null,
+      pipelineId: resolvedOpts?.pipelineId ?? null,
+      skipReason: null,
     }
 
     this._jobs.set(id, job)
@@ -217,6 +234,7 @@ export class QueueManager {
       }
       job.status = 'canceled'
       job.finishedAt = new Date().toISOString()
+      this._skipDependents(jobId, `Parent job ${jobId} was canceled`)
       this._recomputePositions()
       this._persistJob(job)
       this._broadcastQueueState()
@@ -341,7 +359,16 @@ export class QueueManager {
     if (this._paused) return
     if (this._queue.length === 0) return
 
-    const nextJobId = this._queue.shift()!
+    const readyIndex = this._queue.findIndex(id => {
+      const job = this._jobs.get(id)
+      if (!job) return true
+      return this._isDependencyMet(job)
+    })
+
+    if (readyIndex === -1) return
+
+    const nextJobId = this._queue.splice(readyIndex, 1)[0]
+    this._recomputePositions()
     this._startJob(nextJobId)
   }
 
@@ -403,7 +430,14 @@ export class QueueManager {
     let lastResultEvent: Record<string, unknown> | null = null
 
     if (this._db) {
-      createJob(this._db, { id: jobId, command: job.command, started_at: job.startedAt!, priority: job.priority })
+      createJob(this._db, {
+        id: jobId,
+        command: job.command,
+        started_at: job.startedAt!,
+        priority: job.priority,
+        depends_on_job_id: job.dependsOnJobId,
+        pipeline_id: job.pipelineId,
+      })
     }
 
     const emitLine = (source: 'stdout' | 'stderr', line: string): void => {
@@ -620,6 +654,16 @@ export class QueueManager {
       this._onJobFinished(jobId, finalStatus, costUsd ?? undefined)
     }
 
+    // Handle dependent jobs: skip them if parent did not complete successfully
+    if (finalStatus !== 'completed') {
+      this._skipDependents(jobId, `Parent job ${jobId} ${finalStatus}`)
+    }
+
+    // Check pipeline status
+    if (job.pipelineId) {
+      this._checkPipelineStatus(job.pipelineId)
+    }
+
     this._broadcastQueueState()
     this._drainQueue()
   }
@@ -699,17 +743,16 @@ export class QueueManager {
   private _persistJob(job: Job): void {
     if (!this._db) return
     // For queued jobs, we use the DB to store queue position and priority for startup restore.
-    // We only upsert queue_position + priority — the rest is handled by createJob/finishJob.
+    // We only upsert queue_position + priority + dependency fields — the rest is handled by createJob/finishJob.
     // Since this method is called for all status transitions, we use a flexible upsert
-    // that only touches queue_position and priority (for queued jobs) — other fields are
+    // that only touches queue_position, priority, and dependency fields (for queued jobs) — other fields are
     // managed by the existing createJob/finishJob API.
     try {
       this._db.prepare(
-        `UPDATE jobs SET queue_position = ?, priority = ? WHERE id = ?`
-      ).run(job.queuePosition ?? null, job.priority, job.id)
+        `UPDATE jobs SET queue_position = ?, priority = ?, depends_on_job_id = ?, pipeline_id = ? WHERE id = ?`
+      ).run(job.queuePosition ?? null, job.priority, job.dependsOnJobId ?? null, job.pipelineId ?? null, job.id)
     } catch {
-      // Job may not exist in DB yet (e.g., queued before createJob is called in _startJob)
-      // This is fine — we'll create the row when the job starts.
+      // Job may not exist in DB yet
     }
   }
 
@@ -735,8 +778,8 @@ export class QueueManager {
 
       // Restore queued jobs in order (priority DESC then queue_position ASC)
       const rows = this._db.prepare(
-        `SELECT id, command, queue_position, priority FROM jobs WHERE status = 'queued' ORDER BY queue_position ASC`
-      ).all() as Array<{ id: string; command: string; queue_position: number | null; priority: string | null }>
+        `SELECT id, command, queue_position, priority, depends_on_job_id, pipeline_id FROM jobs WHERE status = 'queued' ORDER BY queue_position ASC`
+      ).all() as Array<{ id: string; command: string; queue_position: number | null; priority: string | null; depends_on_job_id: string | null; pipeline_id: string | null }>
 
       for (const row of rows) {
         const priority = (VALID_PRIORITIES.has(row.priority ?? '') ? row.priority : 'normal') as JobPriority
@@ -749,6 +792,9 @@ export class QueueManager {
           startedAt: null,
           finishedAt: null,
           exitCode: null,
+          dependsOnJobId: row.depends_on_job_id ?? null,
+          pipelineId: row.pipeline_id ?? null,
+          skipReason: null,
         }
         this._jobs.set(row.id, job)
         this._queue.push(row.id)
@@ -770,6 +816,73 @@ export class QueueManager {
       this._paused = pauseRow?.value === 'true'
     } catch {
       // DB may not have queue_state table yet — ignore
+    }
+  }
+
+  private _isDependencyMet(job: Job): boolean {
+    if (!job.dependsOnJobId) return true
+
+    const parent = this._jobs.get(job.dependsOnJobId)
+    if (parent) return parent.status === 'completed'
+
+    if (this._db) {
+      const row = this._db.prepare('SELECT status FROM jobs WHERE id = ?').get(job.dependsOnJobId) as { status: string } | undefined
+      if (row) return row.status === 'completed'
+    }
+
+    return true
+  }
+
+  private _skipDependents(parentJobId: string, reason: string): void {
+    const toSkip: string[] = []
+
+    for (const [id, job] of this._jobs) {
+      if (job.dependsOnJobId === parentJobId && job.status === 'queued') {
+        toSkip.push(id)
+      }
+    }
+
+    for (const id of toSkip) {
+      const job = this._jobs.get(id)
+      if (!job) continue
+
+      const idx = this._queue.indexOf(id)
+      if (idx !== -1) this._queue.splice(idx, 1)
+
+      job.status = 'skipped'
+      job.finishedAt = new Date().toISOString()
+      job.skipReason = reason
+
+      if (this._db) {
+        // Ensure the job row exists before updating (queued jobs may not have been persisted via createJob yet)
+        const exists = this._db.prepare('SELECT 1 FROM jobs WHERE id = ?').get(id)
+        if (!exists) {
+          this._db.prepare(
+            `INSERT INTO jobs (id, command, started_at, status, skip_reason, finished_at, depends_on_job_id, pipeline_id) VALUES (?, ?, ?, 'skipped', ?, ?, ?, ?)`
+          ).run(id, job.command, job.finishedAt, reason, job.finishedAt, job.dependsOnJobId, job.pipelineId)
+        } else {
+          skipJob(this._db, id, reason)
+        }
+      }
+
+      this._skipDependents(id, `Parent job ${id} was skipped`)
+    }
+  }
+
+  private _checkPipelineStatus(pipelineId: string): void {
+    const pipelineJobs = Array.from(this._jobs.values()).filter(j => j.pipelineId === pipelineId)
+    if (pipelineJobs.length === 0) return
+
+    const allDone = pipelineJobs.every(j => j.status === 'completed')
+    const anyFailed = pipelineJobs.some(j =>
+      j.status === 'failed' || j.status === 'skipped' || j.status === 'canceled' || j.status === 'zombie_terminated'
+    )
+    const anyPending = pipelineJobs.some(j => j.status === 'queued' || j.status === 'running')
+
+    if (allDone) {
+      this._broadcast({ type: 'pipeline_status', pipelineId, status: 'completed' })
+    } else if (anyFailed && !anyPending) {
+      this._broadcast({ type: 'pipeline_status', pipelineId, status: 'failed' })
     }
   }
 

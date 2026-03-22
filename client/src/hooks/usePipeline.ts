@@ -16,12 +16,15 @@ export interface LogLine {
 export interface QueueJob {
   id: string
   command: string
-  status: 'queued' | 'running' | 'completed' | 'failed' | 'canceled'
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'canceled' | 'zombie_terminated' | 'skipped'
   queuePosition: number | null
   priority: JobPriority
   startedAt: string | null
   finishedAt: string | null
   exitCode: number | null
+  dependsOnJobId: string | null
+  pipelineId: string | null
+  skipReason: string | null
 }
 
 export interface QueueState {

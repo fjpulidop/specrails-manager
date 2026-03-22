@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getApiBase } from '../lib/api'
 import { formatDistanceToNow } from 'date-fns'
-import { Trash2, ClipboardList, GitCompareArrows } from 'lucide-react'
+import { Trash2, ClipboardList, GitCompareArrows, Link2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
@@ -20,9 +20,10 @@ const STATUS_BADGE: Record<JobStatus, { variant: BadgeVariant; label: string; to
   canceled: { variant: 'canceled', label: 'canceled', tooltip: 'Job was manually canceled' },
   queued: { variant: 'queued', label: 'queued', tooltip: 'Job is waiting to run' },
   zombie_terminated: { variant: 'failed', label: 'zombie', tooltip: 'Job was auto-terminated after prolonged inactivity' },
+  skipped: { variant: 'warning', label: 'skipped', tooltip: 'Job was skipped because a parent job in the pipeline failed' },
 }
 
-const ALL_STATUSES: JobStatus[] = ['running', 'completed', 'failed', 'canceled', 'zombie_terminated', 'queued']
+const ALL_STATUSES: JobStatus[] = ['running', 'completed', 'failed', 'canceled', 'zombie_terminated', 'queued', 'skipped']
 
 const PRIORITY_STYLES: Record<JobPriority, { className: string; label: string }> = {
   critical: { className: 'bg-red-500/15 text-red-400 border-red-500/30', label: 'critical' },
@@ -347,9 +348,23 @@ export function RecentJobs({ jobs, isLoading, onJobsCleared, onProposalClick, on
               )}
 
               {/* Command */}
-              <code className="text-xs text-foreground/80 truncate flex-1 min-w-0">
-                {job.command}
-              </code>
+              <div className="flex items-center gap-1 flex-1 min-w-0">
+                {job.pipeline_id && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Link2 className="w-3 h-3 text-dracula-purple/60 shrink-0" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Part of a pipeline
+                      {job.depends_on_job_id && ' (depends on previous step)'}
+                      {job.skip_reason && ` — ${job.skip_reason}`}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                <code className="text-xs text-foreground/80 truncate">
+                  {job.command}
+                </code>
+              </div>
 
               {/* Meta */}
               <div className="flex items-center gap-3 text-[10px] text-muted-foreground shrink-0">
