@@ -1,6 +1,6 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 
-const STORAGE_KEY = 'specrails.dashboard.sectionPrefs'
+const STORAGE_KEY_PREFIX = 'specrails.dashboard.sectionPrefs'
 
 export type SectionId = 'health' | 'commands' | 'rails' | 'jobs'
 
@@ -18,9 +18,13 @@ interface StoredPrefs {
   pinned: SectionId[]
 }
 
-function loadPrefs(): SectionPrefs {
+function storageKey(projectId?: string): string {
+  return projectId ? `${STORAGE_KEY_PREFIX}.${projectId}` : STORAGE_KEY_PREFIX
+}
+
+function loadPrefs(key: string): SectionPrefs {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(key)
     if (!raw) return { order: DEFAULT_ORDER, pinned: new Set() }
     const parsed = JSON.parse(raw) as StoredPrefs
     const validIds = new Set<string>(DEFAULT_ORDER)
@@ -38,23 +42,33 @@ function loadPrefs(): SectionPrefs {
   }
 }
 
-function savePrefs(prefs: SectionPrefs): void {
+function savePrefs(key: string, prefs: SectionPrefs): void {
   const stored: StoredPrefs = {
     order: prefs.order,
     pinned: Array.from(prefs.pinned),
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(stored))
+  localStorage.setItem(key, JSON.stringify(stored))
 }
 
-export function useSectionPreferences() {
-  const [prefs, setPrefs] = useState<SectionPrefs>(loadPrefs)
+export function useSectionPreferences(projectId?: string) {
+  const key = storageKey(projectId)
+  const keyRef = useRef(key)
+  keyRef.current = key
+
+  const [prefs, setPrefs] = useState<SectionPrefs>(() => loadPrefs(key))
 
   // Track which sections are currently expanded (transient UI state)
   // Pinned sections start expanded; unpinned start collapsed
   const [expanded, setExpanded] = useState<Set<SectionId>>(() => {
-    const initial = loadPrefs()
-    return new Set(initial.pinned)
+    return new Set(loadPrefs(key).pinned)
   })
+
+  // Reload prefs when project changes
+  useEffect(() => {
+    const loaded = loadPrefs(key)
+    setPrefs(loaded)
+    setExpanded(new Set(loaded.pinned))
+  }, [key])
 
   const prefsRef = useRef(prefs)
   prefsRef.current = prefs
@@ -62,7 +76,7 @@ export function useSectionPreferences() {
   const updatePrefs = useCallback((updater: (prev: SectionPrefs) => SectionPrefs) => {
     setPrefs((prev) => {
       const next = updater(prev)
-      savePrefs(next)
+      savePrefs(keyRef.current, next)
       prefsRef.current = next
       return next
     })
