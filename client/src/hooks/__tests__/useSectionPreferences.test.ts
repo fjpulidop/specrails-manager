@@ -34,7 +34,7 @@ describe('useSectionPreferences', () => {
     })
 
     it('restores order from localStorage', () => {
-      const customOrder: SectionId[] = ['jobs', 'health', 'commands', 'rails']
+      const customOrder: SectionId[] = ['jobs', 'health', 'commands', 'tickets', 'rails']
       localStorage.setItem(STORAGE_KEY_A, JSON.stringify({ order: customOrder, pinned: [] }))
 
       const { result } = renderHook(() => useSectionPreferences(PROJECT_A))
@@ -88,7 +88,7 @@ describe('useSectionPreferences', () => {
   describe('reorder', () => {
     it('updates order and persists to localStorage', () => {
       const { result } = renderHook(() => useSectionPreferences(PROJECT_A))
-      const newOrder: SectionId[] = ['jobs', 'commands', 'rails', 'health']
+      const newOrder: SectionId[] = ['jobs', 'commands', 'tickets', 'rails', 'health']
 
       act(() => {
         result.current.reorder(newOrder)

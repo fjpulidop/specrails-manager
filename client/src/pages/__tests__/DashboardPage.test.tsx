@@ -69,6 +69,22 @@ vi.mock('../../components/BatchImplementWizard', () => ({
     open ? <div data-testid="batch-wizard">BatchImplementWizard</div> : null,
 }))
 
+vi.mock('../../hooks/useTickets', () => ({
+  useTickets: () => ({
+    tickets: [],
+    loading: false,
+    isLoading: false,
+    error: null,
+    newTicketIds: new Set(),
+    refetch: vi.fn(),
+    refresh: vi.fn(),
+    deleteTicket: vi.fn(),
+    updateTicketStatus: vi.fn(),
+    updateTicketPriority: vi.fn(),
+    createTicket: vi.fn(),
+    updateTicket: vi.fn(),
+  }),
+}))
 
 describe('DashboardPage', () => {
   beforeEach(() => {
@@ -82,10 +98,11 @@ describe('DashboardPage', () => {
 
   // ─── Section headers (always visible, even when collapsed) ─────────────
 
-  it('renders all four section headers', () => {
+  it('renders all five section headers', () => {
     render(<DashboardPage />)
     expect(screen.getByText('Health')).toBeInTheDocument()
     expect(screen.getByText('Spec')).toBeInTheDocument()
+    expect(screen.getByText('Tickets')).toBeInTheDocument()
     expect(screen.getByText('Rails')).toBeInTheDocument()
     expect(screen.getByText('Jobs')).toBeInTheDocument()
   })
@@ -94,6 +111,7 @@ describe('DashboardPage', () => {
     render(<DashboardPage />)
     expect(screen.getByTestId('section-health')).toBeInTheDocument()
     expect(screen.getByTestId('section-commands')).toBeInTheDocument()
+    expect(screen.getByTestId('section-tickets')).toBeInTheDocument()
     expect(screen.getByTestId('section-rails')).toBeInTheDocument()
     expect(screen.getByTestId('section-jobs')).toBeInTheDocument()
   })
@@ -104,6 +122,7 @@ describe('DashboardPage', () => {
     render(<DashboardPage />)
     expect(screen.queryByTestId('content-health')).not.toBeInTheDocument()
     expect(screen.queryByTestId('content-commands')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('content-tickets')).not.toBeInTheDocument()
     expect(screen.queryByTestId('content-rails')).not.toBeInTheDocument()
     expect(screen.queryByTestId('content-jobs')).not.toBeInTheDocument()
   })
@@ -141,6 +160,7 @@ describe('DashboardPage', () => {
     render(<DashboardPage />)
     expect(screen.getByTestId('pin-health')).toBeInTheDocument()
     expect(screen.getByTestId('pin-commands')).toBeInTheDocument()
+    expect(screen.getByTestId('pin-tickets')).toBeInTheDocument()
     expect(screen.getByTestId('pin-rails')).toBeInTheDocument()
     expect(screen.getByTestId('pin-jobs')).toBeInTheDocument()
   })
@@ -151,6 +171,7 @@ describe('DashboardPage', () => {
     render(<DashboardPage />)
     expect(screen.getByTestId('drag-handle-health')).toBeInTheDocument()
     expect(screen.getByTestId('drag-handle-commands')).toBeInTheDocument()
+    expect(screen.getByTestId('drag-handle-tickets')).toBeInTheDocument()
     expect(screen.getByTestId('drag-handle-rails')).toBeInTheDocument()
     expect(screen.getByTestId('drag-handle-jobs')).toBeInTheDocument()
   })
@@ -159,7 +180,7 @@ describe('DashboardPage', () => {
 
   it('pinned sections start expanded', () => {
     localStorage.setItem('specrails.dashboard.sectionPrefs.proj-1', JSON.stringify({
-      order: ['health', 'rails', 'commands', 'jobs'],
+      order: ['health', 'rails', 'commands', 'tickets', 'jobs'],
       pinned: ['commands'],
     }))
 

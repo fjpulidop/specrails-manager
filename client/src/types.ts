@@ -302,3 +302,29 @@ export interface JobTemplate {
   updated_at: string
 }
 
+// ─── Local Tickets ───────────────────────────────────────────────────────────
+
+export type TicketStatus = 'todo' | 'in_progress' | 'done' | 'cancelled'
+export type TicketPriority = 'critical' | 'high' | 'medium' | 'low'
+
+export interface LocalTicket {
+  id: number
+  title: string
+  description: string
+  status: TicketStatus
+  priority: TicketPriority
+  labels: string[]
+  assignee: string | null
+  prerequisites: number[]
+  metadata: {
+    vpc_scores?: Record<string, unknown>
+    effort_level?: string
+    user_story?: string
+    area?: string
+  }
+  created_at: string
+  updated_at: string
+  created_by: string
+  source: 'manual' | 'product-backlog' | 'propose-spec'
+}
+

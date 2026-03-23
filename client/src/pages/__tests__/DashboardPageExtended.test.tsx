@@ -82,6 +82,23 @@ vi.mock('../../components/ProjectHealthWidget', () => ({
   ProjectHealthWidget: () => null,
 }))
 
+vi.mock('../../hooks/useTickets', () => ({
+  useTickets: () => ({
+    tickets: [],
+    loading: false,
+    isLoading: false,
+    error: null,
+    newTicketIds: new Set(),
+    refetch: vi.fn(),
+    refresh: vi.fn(),
+    deleteTicket: vi.fn(),
+    updateTicketStatus: vi.fn(),
+    updateTicketPriority: vi.fn(),
+    createTicket: vi.fn(),
+    updateTicket: vi.fn(),
+  }),
+}))
+
 /** Helper: expand a collapsed section by clicking its toggle */
 function expandSection(sectionId: string) {
   fireEvent.click(screen.getByTestId(`toggle-${sectionId}`))

@@ -2,24 +2,12 @@ import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react
 import { toast } from 'sonner'
 import { getApiBase } from '../lib/api'
 import { useSharedWebSocket } from './useSharedWebSocket'
+import type { LocalTicket } from '../types'
+
+// Re-export for backward compat
+export type { LocalTicket }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-export interface LocalTicket {
-  id: number
-  title: string
-  description: string
-  status: 'todo' | 'in_progress' | 'done' | 'cancelled'
-  priority: 'critical' | 'high' | 'medium' | 'low'
-  labels: string[]
-  assignee: string | null
-  prerequisites: number[]
-  metadata: Record<string, unknown>
-  created_at: string
-  updated_at: string
-  created_by: string
-  source: string
-}
 
 interface TicketWsMessage {
   type: 'ticket_created' | 'ticket_updated' | 'ticket_deleted'
@@ -40,6 +28,9 @@ interface UseTicketsResult {
   /** IDs of recently added tickets — use for glow animation, auto-clears after 3s */
   newTicketIds: Set<number>
   refetch: () => void
+  deleteTicket: (ticketId: number) => Promise<boolean>
+  updateTicketStatus: (ticketId: number, status: LocalTicket['status']) => Promise<boolean>
+  updateTicketPriority: (ticketId: number, priority: LocalTicket['priority']) => Promise<boolean>
 }
 
 const GLOW_DURATION_MS = 3000
@@ -205,5 +196,39 @@ export function useTickets({ activeProjectId }: UseTicketsOpts): UseTicketsResul
     return () => unregisterHandler('tickets')
   }, [handleMessage, registerHandler, unregisterHandler])
 
-  return { tickets, loading, error, newTicketIds, refetch }
+  // ── CRUD mutations ────────────────────────────────────────────────────────
+
+  const deleteTicket = useCallback(async (ticketId: number): Promise<boolean> => {
+    const res = await fetch(`${getApiBase()}/tickets/${ticketId}`, { method: 'DELETE' })
+    if (res.ok) refetch()
+    return res.ok
+  }, [refetch])
+
+  const updateTicketStatus = useCallback(
+    async (ticketId: number, status: LocalTicket['status']): Promise<boolean> => {
+      const res = await fetch(`${getApiBase()}/tickets/${ticketId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      if (res.ok) refetch()
+      return res.ok
+    },
+    [refetch]
+  )
+
+  const updateTicketPriority = useCallback(
+    async (ticketId: number, priority: LocalTicket['priority']): Promise<boolean> => {
+      const res = await fetch(`${getApiBase()}/tickets/${ticketId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priority }),
+      })
+      if (res.ok) refetch()
+      return res.ok
+    },
+    [refetch]
+  )
+
+  return { tickets, loading, error, newTicketIds, refetch, deleteTicket, updateTicketStatus, updateTicketPriority }
 }

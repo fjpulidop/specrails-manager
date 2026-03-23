@@ -34,11 +34,14 @@ import { useHub } from '../hooks/useHub'
 import { ProjectHealthWidget } from '../components/ProjectHealthWidget'
 import { TemplateLibrary } from '../components/TemplateLibrary'
 import { ExportDropdown } from '../components/ExportDropdown'
+import { TicketsSection } from '../components/TicketsSection'
+import { useTickets } from '../hooks/useTickets'
 
 
 const SECTION_TITLES: Record<SectionId, string> = {
   health: 'Health',
   commands: 'Spec',
+  tickets: 'Tickets',
   rails: 'Rails',
   jobs: 'Jobs',
 }
@@ -46,6 +49,7 @@ const SECTION_TITLES: Record<SectionId, string> = {
 export default function DashboardPage() {
   const { activeProjectId } = useHub()
   const { recentJobs } = usePipeline(activeProjectId)
+  const { tickets, loading: isLoadingTickets } = useTickets({ activeProjectId })
   const [wizardOpen, setWizardOpen] = useState<string | null>(null)
 
   // Section preferences (order, pin, expand state)
@@ -201,6 +205,14 @@ export default function DashboardPage() {
             )}
           </>
         )
+      case 'tickets':
+        return (
+          <TicketsSection
+            tickets={tickets}
+            isLoading={isLoadingTickets}
+            onTicketClick={() => {/* detail modal handled in Phase 3.3 */}}
+          />
+        )
       case 'rails':
         return (
           <TemplateLibrary
@@ -224,6 +236,14 @@ export default function DashboardPage() {
 
   function getSectionIndicator(sectionId: SectionId) {
     if (sectionId === 'health') return <HealthIndicatorBadge />
+    if (sectionId === 'tickets' && tickets.length > 0) {
+      const active = tickets.filter((t) => t.status === 'todo' || t.status === 'in_progress').length
+      return (
+        <Badge variant="secondary" className="text-[9px]">
+          {active} active
+        </Badge>
+      )
+    }
     return undefined
   }
 
