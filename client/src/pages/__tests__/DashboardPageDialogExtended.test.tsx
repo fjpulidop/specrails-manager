@@ -60,6 +60,23 @@ vi.mock('../../components/ProjectHealthWidget', () => ({
   ProjectHealthWidget: () => null,
 }))
 
+vi.mock('../../hooks/useTickets', () => ({
+  useTickets: () => ({
+    tickets: [],
+    loading: false,
+    isLoading: false,
+    error: null,
+    newTicketIds: new Set(),
+    refetch: vi.fn(),
+    refresh: vi.fn(),
+    deleteTicket: vi.fn(),
+    updateTicketStatus: vi.fn(),
+    updateTicketPriority: vi.fn(),
+    createTicket: vi.fn(),
+    updateTicket: vi.fn(),
+  }),
+}))
+
 // useProjectCache with proposal returning result_markdown and issue_url
 const mockRefreshJobs = vi.fn()
 
