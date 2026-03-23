@@ -49,7 +49,7 @@ const SECTION_TITLES: Record<SectionId, string> = {
 export default function DashboardPage() {
   const { activeProjectId } = useHub()
   const { recentJobs } = usePipeline(activeProjectId)
-  const { tickets, loading: isLoadingTickets } = useTickets({ activeProjectId })
+  const { tickets, isLoading: isLoadingTickets } = useTickets()
   const [wizardOpen, setWizardOpen] = useState<string | null>(null)
 
   // Section preferences (order, pin, expand state)
