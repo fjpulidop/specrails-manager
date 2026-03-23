@@ -49,7 +49,7 @@ export default function DashboardPage() {
   const [wizardOpen, setWizardOpen] = useState<string | null>(null)
 
   // Section preferences (order, pin, expand state)
-  const { order, reorder, togglePin, isPinned, toggleExpanded, isExpanded } = useSectionPreferences()
+  const { order, reorder, togglePin, isPinned, toggleExpanded, isExpanded } = useSectionPreferences(activeProjectId ?? undefined)
 
   // DnD sensors
   const sensors = useSensors(

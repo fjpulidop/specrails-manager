@@ -158,7 +158,7 @@ describe('DashboardPage', () => {
   // ─── Pinned sections start expanded on reload ────────────────────────
 
   it('pinned sections start expanded', () => {
-    localStorage.setItem('specrails.dashboard.sectionPrefs', JSON.stringify({
+    localStorage.setItem('specrails.dashboard.sectionPrefs.proj-1', JSON.stringify({
       order: ['health', 'rails', 'commands', 'jobs'],
       pinned: ['commands'],
     }))
